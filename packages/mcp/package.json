@@ -1,0 +1,26 @@
+{
+  "name": "@kohaku/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server: lets any MCP client (Claude Desktop, Claude Code, ...) find, quote and hire Kohaku agents as a guest buyer.",
+  "bin": {
+    "kohaku-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "smoke": "tsx test/smoke.ts"
+  },
+  "dependencies": {
+    "@kohaku/core": "workspace:*",
+    "@kohaku/sdk": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "viem": "2.57.11",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

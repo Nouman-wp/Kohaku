@@ -59,7 +59,8 @@ export class Intents {
       signature,
     });
     if (!isAddressEqual(signer, intent.operator)) throw new IntentError("signature does not match the intent's operator");
-    const buyer = this.registry.get(intent.buyer);
+    // a freshly registered agent may not be in the local mirror yet: read it from chain
+    const buyer = this.registry.get(intent.buyer) ?? (await this.registry.refresh(intent.buyer).catch(() => undefined));
     if (!buyer) throw new IntentError(`unknown buyer agent #${intent.buyer}`);
     if (!isAddressEqual(buyer.operator, intent.operator)) {
       throw new IntentError(`only agent #${intent.buyer}'s operator (${buyer.operator}) can authorise its spending`);
