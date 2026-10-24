@@ -246,7 +246,12 @@ export class Settlements {
     const open = rows.filter((r) => r.status !== "recorded" && r.status !== "defaulted");
     const deadline = e.settle_deadline ?? Infinity;
     if (open.length > 0 && Date.now() > deadline + DEFAULT_GRACE_MS) {
-      for (const r of open.filter((r) => r.status === "awaiting_payment")) await this.default(r);
+      // the contract compares against block time, which can lag the wall clock on a quiet chain
+      const block = await this.chain.publicClient.getBlock().catch(() => null);
+      const chainNow = block ? Number(block.timestamp) * 1000 : Date.now();
+      if (chainNow > deadline) {
+        for (const r of open.filter((r) => r.status === "awaiting_payment")) await this.default(r);
+      }
     }
     const stillOpen = this.list({ epoch: e.id }).filter((r) => r.status !== "recorded" && r.status !== "defaulted");
     if (stillOpen.length === 0) await this.payout(e.id);
