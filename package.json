@@ -11,7 +11,6 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "chain": "node scripts/chain.mjs",
     "deploy:local": "node scripts/deploy.mjs local",
     "deploy:testnet": "node scripts/deploy.mjs hashkey-testnet",
     "deploy:mainnet": "node scripts/deploy.mjs hashkey",
