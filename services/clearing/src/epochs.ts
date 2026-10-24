@@ -17,6 +17,8 @@ export interface EpochTimings {
   arbitrationTimeoutSeconds: number;
   postChunkSize: number;
   writeReputation: boolean;
+  /** write scores on chain every N epochs (scores are cumulative, so nothing is lost) */
+  reputationStride: number;
   publicUrl: string;
 }
 
@@ -312,8 +314,13 @@ export class EpochEngine {
         if (!e || e.phase !== "sealed") break;
         const ids = this.registry.list().map((a) => a.agentId);
         const { rows, detailsHash } = this.rep.epochScores(next, ids);
-        const changed = rows.filter((r) => r.score !== (this.rep.chainScore(r.agentId).score ?? -1));
-        if (changed.length && this.t.writeReputation) {
+        // write only agents with a track record whose score moved since the last on-chain write
+        const changed = rows.filter((r) => {
+          const onchain = this.rep.chainScore(r.agentId).score;
+          const active = r.inputs.completed + r.inputs.settledOnTime + r.inputs.defaults + r.inputs.disputesLost + r.inputs.frivolousDisputes > 0;
+          return onchain === null ? active : r.score !== onchain;
+        });
+        if (changed.length && this.t.writeReputation && next % this.t.reputationStride === 0) {
           const receipt = await this.chain.write(`recordEpochScores e${next}`, {
             address: this.chain.d.reputationRegistry,
             abi: abis.reputationRegistryAbi,

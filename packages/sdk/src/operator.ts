@@ -34,8 +34,8 @@ export class Operator {
     this.account = privateKeyToAccount(privateKey);
     const base = CHAINS[chainKeyFromId(cfg.chain.id)];
     this.chain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
-    this.publicClient = createPublicClient({ chain: this.chain, transport: http(rpcUrl) }) as PublicClient;
-    this.wallet = createWalletClient({ chain: this.chain, transport: http(rpcUrl), account: this.account });
+    this.publicClient = createPublicClient({ chain: this.chain, transport: http(rpcUrl), pollingInterval: this.chain.id === 31337 ? 250 : 1_000 }) as PublicClient;
+    this.wallet = createWalletClient({ chain: this.chain, transport: http(rpcUrl), account: this.account, pollingInterval: this.chain.id === 31337 ? 250 : 1_000 });
   }
 
   get address(): Address {

@@ -54,6 +54,7 @@ async function main(): Promise<void> {
     arbitrationTimeoutSeconds: cfg.ARBITRATION_TIMEOUT_SECONDS,
     postChunkSize: cfg.POST_CHUNK_SIZE,
     writeReputation: cfg.WRITE_REPUTATION_ONCHAIN === "true",
+    reputationStride: cfg.REPUTATION_EPOCH_STRIDE,
     publicUrl: cfg.PUBLIC_API_URL,
   });
   const ledger = new Ledger(db, registry, intents, rep, chain, domain, cfg.deployment.token, { disputeWindowSeconds: cfg.DISPUTE_WINDOW_SECONDS, publicUrl: cfg.PUBLIC_API_URL }, () =>

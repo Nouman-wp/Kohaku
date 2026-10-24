@@ -134,8 +134,8 @@ export class KohakuAgent {
     this.domain = opts.cfg.domain;
     const base = CHAINS[chainKeyFromId(opts.cfg.chain.id)];
     this.chain = { ...base, rpcUrls: { default: { http: [opts.rpcUrl] } } };
-    this.publicClient = createPublicClient({ chain: this.chain, transport: http(opts.rpcUrl) }) as PublicClient;
-    this.wallet = createWalletClient({ chain: this.chain, transport: http(opts.rpcUrl), account: this.account });
+    this.publicClient = createPublicClient({ chain: this.chain, transport: http(opts.rpcUrl), pollingInterval: this.chain.id === 31337 ? 250 : 1_000 }) as PublicClient;
+    this.wallet = createWalletClient({ chain: this.chain, transport: http(opts.rpcUrl), account: this.account, pollingInterval: this.chain.id === 31337 ? 250 : 1_000 });
     this.hsp = new LocalHspPayer(this.wallet, this.publicClient, this.account, this.chain);
   }
 

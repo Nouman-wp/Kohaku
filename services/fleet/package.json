@@ -1,0 +1,23 @@
+{
+  "name": "@kohaku/fleet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kohaku's live agent fleet: Orchestrator, Scout, Verifier, Polyglot, Scribe, Lens, Arbiter and Rogue, plus the scenario runner.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kohaku/core": "workspace:*",
+    "@kohaku/sdk": "workspace:*",
+    "viem": "2.57.11"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

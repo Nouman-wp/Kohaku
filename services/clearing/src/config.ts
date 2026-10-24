@@ -34,6 +34,7 @@ const schema = z.object({
   ARBITRATION_TIMEOUT_SECONDS: z.coerce.number().min(3).default(15),
   POST_CHUNK_SIZE: z.coerce.number().min(1).max(400).default(120),
   WRITE_REPUTATION_ONCHAIN: z.enum(["true", "false"]).default("true"),
+  REPUTATION_EPOCH_STRIDE: z.coerce.number().min(1).default(1),
   HSP_MODE: z.enum(["local", "coordinator"]).default("local"),
   HSP_COORDINATOR_URL: z.string().optional(),
   HSP_API_KEY: z.string().optional(),

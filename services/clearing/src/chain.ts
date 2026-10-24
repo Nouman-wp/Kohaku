@@ -64,9 +64,10 @@ export class Chain {
     this.d = deployment;
     const base = CHAINS[key];
     this.viemChain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
-    this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000 }) }) as PublicClient;
+    const pollingInterval = key === "local" ? 250 : 1_000;
+    this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000 }), pollingInterval }) as PublicClient;
     this.account = privateKeyToAccount(clearerKey);
-    this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000 }), account: this.account });
+    this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000 }), account: this.account, pollingInterval });
   }
 
   get explorer(): string | null {

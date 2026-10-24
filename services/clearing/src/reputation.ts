@@ -106,6 +106,7 @@ export class ReputationBook {
       this.db.run("UPDATE reputation_history SET tx = ? WHERE agent_id = ? AND epoch = ?", tx, Number(id), epoch);
       const row = this.db.get<{ score: number }>("SELECT score FROM reputation_history WHERE agent_id = ? AND epoch = ?", Number(id), epoch);
       if (row) {
+        this.live(id); // make sure the row exists
         this.db.run("UPDATE reputation SET chain_score = ?, chain_epoch = ? WHERE agent_id = ?", row.score, epoch, Number(id));
       }
     }
