@@ -280,12 +280,13 @@ export class Ledger {
     const now = Date.now();
     const challengeEndsAt = now + this.opts.disputeWindowSeconds * 1000;
     this.db.run(
-      "UPDATE jobs SET status = 'delivered', delivered_at = ?, challenge_ends_at = ?, result_hash = ?, result_json = ?, delivery_sig = ? WHERE id = ? AND status = 'accepted'",
+      "UPDATE jobs SET status = 'delivered', delivered_at = ?, challenge_ends_at = ?, result_hash = ?, result_json = ?, delivery_sig = ?, delivery_json = ? WHERE id = ? AND status = 'accepted'",
       now,
       challengeEndsAt,
       d.resultHash,
       resultJson,
       input.signature,
+      JSON.stringify(input.delivery),
       job.id,
     );
     this.rep.invalidate([d.seller]);

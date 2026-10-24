@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   result_hash TEXT,
   result_json TEXT,
   delivery_sig TEXT,
+  delivery_json TEXT,
   parent_job TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_epoch ON jobs(epoch);
@@ -257,6 +258,14 @@ export class Db {
     mkdirSync(dataDir, { recursive: true });
     this.raw = new DatabaseSync(join(dataDir, file));
     this.raw.exec(SCHEMA);
+    // additive migrations for databases created by earlier versions
+    for (const sql of ["ALTER TABLE jobs ADD COLUMN delivery_json TEXT"]) {
+      try {
+        this.raw.exec(sql);
+      } catch {
+        // column already exists
+      }
+    }
   }
 
   run(sql: string, ...params: SQLInputValue[]) {

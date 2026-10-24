@@ -365,7 +365,7 @@ export async function buildApi(ctx: Ctx): Promise<FastifyInstance> {
       quote: { message: JSON.parse(job.quote_json), signature: job.quote_sig, hash: job.quote_hash },
       iou: iou ? { ...iouView(iou), postedEpoch: iou.posted_epoch } : null,
       delivery: job.delivered_at
-        ? { deliveredAt: job.delivered_at, resultHash: job.result_hash, signature: job.delivery_sig, challengeEndsAt: job.challenge_ends_at }
+        ? { deliveredAt: job.delivered_at, resultHash: job.result_hash, signature: job.delivery_sig, challengeEndsAt: job.challenge_ends_at, message: job.delivery_json ? JSON.parse(job.delivery_json) : null }
         : null,
       dispute: dispute ? disputeView(dispute) : null,
       epoch: epoch ? epochView(epoch) : null,
@@ -519,11 +519,12 @@ export async function buildApi(ctx: Ctx): Promise<FastifyInstance> {
 
   app.post("/v1/scenario", async (req) => {
     requireAdmin(req);
-    const body = req.body as { action: string; scenario?: string };
-    const r = await fetch(`${cfg.FLEET_CONTROL_URL}/control/${body.action}`, {
+    const { action, token: _token, ...rest } = req.body as { action: string; token?: string } & Record<string, unknown>;
+    if (!/^[a-z-]+$/.test(action)) throw new Error("bad action");
+    const r = await fetch(`${cfg.FLEET_CONTROL_URL}/control/${action}`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-token": cfg.ADMIN_TOKEN },
-      body: JSON.stringify({ scenario: body.scenario }),
+      body: JSON.stringify(rest),
       signal: AbortSignal.timeout(5_000),
     });
     return r.json();

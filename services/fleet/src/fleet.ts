@@ -482,8 +482,25 @@ export class Fleet {
         return true;
       }
       const action = p.split("/")[2];
-      const b = (body ?? {}) as { scenario?: string };
+      const b = (body ?? {}) as { scenario?: string; goal?: string; budget?: number; perJobCap?: number; minReputation?: number; services?: string[]; deadlineMinutes?: number };
       if (action === "start") end(res, 200, await this.scenario(b.scenario ?? ""));
+      else if (action === "intent") {
+        // demo convenience: the fleet operator signs an intent for the orchestrator on the presenter's behalf
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        const view = await this.operator.authorise(this.client, {
+          buyer: this.agents.get("orchestrator")!.agentId,
+          goal: String(b.goal ?? "Produce a researched, fact-checked brief on HashKey Chain").slice(0, 300),
+          budget: USD(Math.min(100, Math.max(0.01, Number(b.budget ?? 20)))),
+          perJobCap: USD(Math.max(0, Number(b.perJobCap ?? 0.05))),
+          minSellerReputation: Math.round(Math.min(1000, Math.max(0, Number(b.minReputation ?? 700)))),
+          allowedServices: Array.isArray(b.services) ? b.services.map(String) : [],
+          allowedSellers: [],
+          notBefore: now - 60n,
+          deadline: now + BigInt(Math.round(Math.max(1, Number(b.deadlineMinutes ?? 60)) * 60)),
+          nonce: BigInt(Date.now()),
+        });
+        end(res, 200, { ok: true, message: `intent ${view.id.slice(0, 10)} signed by the fleet operator`, intent: view });
+      }
       else if (action === "pause") {
         this.state.paused = true;
         end(res, 200, { ok: true, message: "fleet paused (settlement continues)" });

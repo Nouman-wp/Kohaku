@@ -30,6 +30,7 @@ export interface JobRow {
   result_hash: string | null;
   result_json: string | null;
   delivery_sig: string | null;
+  delivery_json: string | null;
   parent_job: string | null;
 }
 
