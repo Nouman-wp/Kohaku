@@ -1,0 +1,44 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 800
+via_ir = false
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+
+[profile.default.fuzz]
+runs = 512
+
+[profile.default.invariant]
+runs = 128
+depth = 64
+fail_on_revert = false
+
+[profile.ci.fuzz]
+runs = 4096
+
+[rpc_endpoints]
+local = "http://127.0.0.1:8545"
+hashkey_testnet = "https://testnet.hsk.xyz"
+hashkey = "https://mainnet.hsk.xyz"
+
+[etherscan]
+hashkey_testnet = { key = "blockscout", chain = 133, url = "https://testnet-explorer.hsk.xyz/api" }
+hashkey = { key = "blockscout", chain = 177, url = "https://hashkey.blockscout.com/api" }
+
+[fmt]
+line_length = 110
+tab_width = 4
+bracket_spacing = false
+
+[lint]
+lint_on_build = false
