@@ -1,0 +1,22 @@
+{
+  "name": "@kohaku/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kohaku protocol primitives: EIP-712 types, netting, commitments, reputation formula, chain config.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abis": "./src/abis.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "viem": "2.57.11"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
