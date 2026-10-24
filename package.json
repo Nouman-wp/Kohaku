@@ -1,0 +1,31 @@
+{
+  "name": "kohaku",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kohaku: the clearing house for the agent economy, on HashKey Chain, settled through HSP.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "chain": "node scripts/chain.mjs",
+    "deploy:local": "node scripts/deploy.mjs local",
+    "deploy:testnet": "node scripts/deploy.mjs hashkey-testnet",
+    "deploy:mainnet": "node scripts/deploy.mjs hashkey",
+    "clearing": "pnpm --filter @kohaku/clearing start",
+    "fleet": "pnpm --filter @kohaku/fleet start",
+    "web": "pnpm --filter @kohaku/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test && pnpm test:contracts",
+    "test:contracts": "cd contracts && forge test",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "^22.15.0"
+  }
+}

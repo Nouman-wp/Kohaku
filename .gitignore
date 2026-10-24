@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+apps/web/dist/
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+
+# runtime data
+.data/
+*.sqlite
+*.sqlite-journal
+*.db
+*.log
+.anvil/
+
+# env and secrets
+.env
+.env.*
+!.env.example
+*.key
+keys/
+
+# editor / os
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# private brief material (kept locally, not part of the public repo)
+DESIGN.md
+ProjectGuide.md
+contracts/deployments/31337.json
+contracts/broadcast/**/31337/
