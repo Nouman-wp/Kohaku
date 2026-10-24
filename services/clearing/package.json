@@ -1,0 +1,27 @@
+{
+  "name": "@kohaku/clearing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kohaku clearing service: IOU intake, epochs, netting, HSP settlement, disputes, reputation, live API.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.1",
+    "@fastify/websocket": "11.3.4",
+    "@kohaku/core": "workspace:*",
+    "fastify": "5.12.7",
+    "viem": "2.57.11",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
