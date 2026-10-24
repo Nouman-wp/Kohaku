@@ -3,7 +3,7 @@ import type { Fleet } from "../fleet.ts";
 import { wikiSearch, type SearchHit } from "../work/wikipedia.ts";
 import { translate } from "../work/translate.ts";
 import { describeChart, type Series } from "../work/chart.ts";
-import { keywords, mainEntity, numbersIn, overlap, summarize } from "../work/text.ts";
+import { keywords, mainEntity, numbersIn, overlap, sentences, summarize } from "../work/text.ts";
 
 /** Prices in stablecoin base units (6 decimals). Sub-cent on purpose. */
 export const PRICES = {
@@ -72,9 +72,21 @@ export function judgeClaim(claim: string, hits: SearchHit[]): FactCheck {
     claim,
     verdict,
     confidence,
-    evidence: best.filter((b) => b.score > 0.15).map((b) => ({ title: b.h.title, url: b.h.url, snippet: (b.h.extract ?? b.h.snippet).slice(0, 280) })),
+    evidence: best.filter((b) => b.score > 0.15).map((b) => ({ title: b.h.title, url: b.h.url, snippet: bestExcerpt(claim, `${b.h.snippet} ${b.h.extract ?? ""}`) })),
     method: `keyword overlap ${top.toFixed(2)} with ${hits.length} sources; numbers ${claimNums.length ? (numsOk ? "matched" : "not matched") : "n/a"}`,
   };
+}
+
+/** Quote the source's sentence that best matches the claim (plus its neighbour), not just its opening. */
+function bestExcerpt(claim: string, text: string): string {
+  const sents = sentences(text);
+  if (sents.length === 0) return text.slice(0, 280);
+  let best = 0;
+  sents.forEach((s, i) => {
+    if (overlap(claim, s) > overlap(claim, sents[best]!)) best = i;
+  });
+  const excerpt = sents.slice(best, best + 2).join(" ");
+  return excerpt.length > 320 ? `${excerpt.slice(0, 317)}…` : excerpt;
 }
 
 // ------------------------------------------------------------------ Verifier

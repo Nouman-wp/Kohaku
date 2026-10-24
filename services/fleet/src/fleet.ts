@@ -358,11 +358,12 @@ export class Fleet {
       }
       case "busy-minute": {
         this.state.scenario = { name, startedAt: now, until: now + 75_000 };
-        const topics = [...TOPICS].sort(() => Math.random() - 0.5).slice(0, 8);
-        topics.forEach((topic, i) =>
-          setTimeout(() => void runBrief(this, { topic, languages: i % 2 ? ["en", "hi"] : ["en"], intentId: intent, origin: "scenario" }), i * 7_000),
-        );
-        return { ok: true, message: "8 briefs over the next minute" };
+        const topics = [...TOPICS].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 15; i++) {
+          const topic = topics[i % topics.length]!;
+          setTimeout(() => void runBrief(this, { topic, languages: i % 2 ? ["en", "hi"] : ["en"], intentId: intent, origin: "scenario" }), i * 4_000);
+        }
+        return { ok: true, message: "15 briefs over the next minute (several hundred IOUs)" };
       }
       case "rogue-attack": {
         this.state.rogueBadRate = 0.95;
