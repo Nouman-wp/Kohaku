@@ -173,6 +173,10 @@ why. Newest decisions are at the bottom of each section.
   registry, in strict epoch order, only for agents whose score changed.
   `REPUTATION_EPOCH_STRIDE` writes every N epochs instead (scores are cumulative, nothing is lost),
   which matters on mainnet.
+- Lost and frivolous disputes fade with a 20-epoch half-life; defaults never do. Without decay a
+  long-running deployment would exclude Rogue forever and the "agents with bad history lose
+  business" story could only be told once. With it, Rogue earns its way back above the floor, gets
+  picked, is caught again and drops again: a loop visitors can watch.
 
 ### 16. Real work engines and their fallbacks
 

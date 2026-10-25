@@ -1,4 +1,4 @@
-import { scoreReputation, emptyInputs, hashJson, type ReputationInputs } from "@kohaku/core";
+import { DISPUTE_HALF_LIFE_EPOCHS, scoreReputation, emptyInputs, hashJson, type ReputationInputs } from "@kohaku/core";
 import type { Db } from "./db.ts";
 
 interface Count {
@@ -11,21 +11,34 @@ interface Count {
  * epoch the same formula is written to the on-chain reputation registry.
  */
 export class ReputationBook {
-  private cache = new Map<string, { score: number; inputs: ReputationInputs }>();
+  private cache = new Map<string, { score: number; inputs: ReputationInputs; ref: number }>();
 
   constructor(private readonly db: Db) {}
+
+  /** The latest epoch the ledger knows about: the "now" that dispute ages are measured from. */
+  private currentEpoch(): number {
+    return this.db.get<{ m: number | null }>("SELECT MAX(id) AS m FROM epochs")?.m ?? 0;
+  }
+
+  /** Σ 0.5^(age / half-life) over the matching disputes: recent ones count fully, old ones fade. */
+  private decayed(sql: string, id: number, ref: number): number {
+    const rows = this.db.all<{ epoch: number }>(sql, id);
+    const w = rows.reduce((a, r) => a + Math.pow(0.5, Math.max(0, ref - r.epoch) / DISPUTE_HALF_LIFE_EPOCHS), 0);
+    return Math.round(w * 1000) / 1000;
+  }
 
   inputs(agentId: bigint, uptoEpoch?: number): ReputationInputs {
     const id = Number(agentId);
     const epochFilter = uptoEpoch === undefined ? "" : ` AND epoch <= ${Math.floor(uptoEpoch)}`;
+    const ref = uptoEpoch ?? this.currentEpoch();
     const i = emptyInputs();
     i.completed = this.db.get<Count>(
       `SELECT COUNT(*) AS n FROM jobs WHERE seller = ? AND status IN ('delivered','settled')${epochFilter}`,
       id,
     )!.n;
-    i.disputesLost = this.db.get<Count>(`SELECT COUNT(*) AS n FROM disputes WHERE seller = ? AND status = 'upheld'${epochFilter}`, id)!.n;
+    i.disputesLost = this.decayed(`SELECT epoch FROM disputes WHERE seller = ? AND status = 'upheld'${epochFilter}`, id, ref);
     i.disputesWon = this.db.get<Count>(`SELECT COUNT(*) AS n FROM disputes WHERE seller = ? AND status = 'rejected'${epochFilter}`, id)!.n;
-    i.frivolousDisputes = this.db.get<Count>(`SELECT COUNT(*) AS n FROM disputes WHERE buyer = ? AND status = 'rejected'${epochFilter}`, id)!.n;
+    i.frivolousDisputes = this.decayed(`SELECT epoch FROM disputes WHERE buyer = ? AND status = 'rejected'${epochFilter}`, id, ref);
     i.settledOnTime = this.db.get<Count>(`SELECT COUNT(*) AS n FROM settlements WHERE agent_id = ? AND status = 'recorded'${epochFilter}`, id)!.n;
     i.defaults = this.db.get<Count>(`SELECT COUNT(*) AS n FROM settlements WHERE agent_id = ? AND status = 'defaulted'${epochFilter}`, id)!.n;
     const vol = this.db.get<{ v: number | null }>(
@@ -36,14 +49,15 @@ export class ReputationBook {
     return i;
   }
 
-  /** Live score, recomputed on demand and cached until invalidated. */
+  /** Live score, recomputed on demand; cached until invalidated or the next epoch starts. */
   live(agentId: bigint): number {
     const key = agentId.toString();
+    const ref = this.currentEpoch();
     const hit = this.cache.get(key);
-    if (hit) return hit.score;
+    if (hit && hit.ref === ref) return hit.score;
     const inputs = this.inputs(agentId);
     const score = scoreReputation(inputs).score;
-    this.cache.set(key, { score, inputs });
+    this.cache.set(key, { score, inputs, ref });
     this.db.run(
       `INSERT INTO reputation(agent_id, live_score, inputs_json, updated_at) VALUES (?,?,?,?)
        ON CONFLICT(agent_id) DO UPDATE SET live_score = excluded.live_score, inputs_json = excluded.inputs_json, updated_at = excluded.updated_at`,

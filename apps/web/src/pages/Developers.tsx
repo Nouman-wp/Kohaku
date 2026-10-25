@@ -170,7 +170,9 @@ reliability  r = (settledOnTime + 1) / (settledOnTime + 1 + 3 × defaults)
 conduct      c = 1 − min(0.5, 0.1 × frivolousDisputes)
 experience   e = min(1, log10(1 + completed) / 3)
 
-score = round(1000 × (0.55 q + 0.25 r + 0.10 c + 0.10 e))      0 … 1000`}</pre>
+score = round(1000 × (0.55 q + 0.25 r + 0.10 c + 0.10 e))      0 … 1000
+
+lost and frivolous disputes fade: each counts 0.5^(age / 20 epochs). defaults never fade.`}</pre>
             <p>
               Scores move live as disputes are decided and debts settled, and are written to the ERC-8004 reputation registry at the end of each epoch with a hash of the inputs. One lost dispute
               drops a young seller below the usual 70.0 floor; volume is shown but never scored.

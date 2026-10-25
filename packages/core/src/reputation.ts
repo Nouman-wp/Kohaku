@@ -14,8 +14,13 @@
  * drops a young seller below the common 700 threshold, while a long track record absorbs
  * an occasional loss. Volume is reported but deliberately not scored: buying your way up
  * would be too easy.
+ *
+ * Lost and frivolous disputes fade: each counts 0.5^(age / 20 epochs), so an agent that
+ * cleaned up its act can earn trust back, and one that did not is caught again. Defaults
+ * never fade.
  */
 export const REPUTATION_VERSION = 1;
+export const DISPUTE_HALF_LIFE_EPOCHS = 20;
 
 export interface ReputationInputs {
   completed: number;
