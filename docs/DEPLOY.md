@@ -45,7 +45,7 @@ Back the file up. It holds every key of the deployment.
    node scripts/fund.mjs testnet          # --dry to preview
    ```
 
-   A busy testnet epoch costs about 0.0012 HSK, so 0.3 HSK on the clearer lasts several days at one
+   A busy testnet epoch costs about 0.002 HSK, so 0.3 HSK on the clearer lasts several days at one
    background brief every 30 minutes.
 4. Set the public base in `.env.testnet` to the website's domain (agent card URLs are written on
    chain at registration, so it must not change):
@@ -119,12 +119,14 @@ instead of "HSP local gateway".
 - `SETTLEMENT_TOKEN=0x054ed45810DbBAb8B27668922D110669c9D88D0a` (USDC.e, "Bridged USDC", 6 decimals,
   EIP-3009). USDT on mainnet has no EIP-3009 and cannot be used. The deploy script refuses the test
   token on mainnet.
-- Base fee is **500 gwei**: deploying costs about **4.8 HSK**, a busy epoch about **0.6 HSK**. The
-  mainnet file uses 10-minute epochs, reputation writes every 10 epochs and one background brief per
-  hour; idle epochs cost nothing.
-- Fund: the deployer with ~10 HSK for deployment and funding; `node scripts/fund.mjs mainnet` tops
-  the clearer up to 20 HSK, the relayer to 2, the fleet operator to 5. The fleet operator also needs
-  about 35 USDC.e (collateral, wallet floats and the validator stake).
+- Base fee is **500 gwei**: deploying costs about **4.8 HSK**, a busy epoch about **1 HSK**
+  (measured on testnet, see DECISIONS §18). The mainnet file uses 10-minute epochs, reputation writes
+  every 10 epochs and one background brief per hour, so about 25 HSK a day while the fleet runs;
+  idle epochs cost nothing. Set `FLEET_BACKGROUND=off` between demos to stop spending.
+- Fund: the deployer with ~35 HSK (4.8 to deploy, 28 for the service wallets, 1 kept in reserve);
+  `node scripts/fund.mjs mainnet` tops the clearer up to 20 HSK, the relayer to 2, the fleet operator
+  to 5 and the rogue operator to 1. The fleet operator also needs about 35 USDC.e (collateral,
+  wallet floats and the validator stake); that money stays in Kohaku's wallets and can be withdrawn.
 
 ```bash
 node scripts/deploy.mjs mainnet       # writes contracts/deployments/177.json, verifies on hashkey.blockscout.com

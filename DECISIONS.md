@@ -210,7 +210,11 @@ why. Newest decisions are at the bottom of each section.
   it, so about **4.8 HSK** on mainnet at 500 gwei.
 - **A busy epoch** (5 IOUs, one debtor, two creditors, two disputes) cost 1.2M gas on testnet:
   `postIous` 485k, `finalizeEpoch` 159k, `recordSettlement` 237k, `payout` 147k, validation
-  requests ~200k each. That is 0.0012 HSK on testnet and about **0.6 HSK on mainnet**.
+  requests ~200k each. A background-brief epoch (18-24 IOUs, two debtors, three creditors) costs
+  1.66-1.89M gas: `postIous` 0.84-1.03M, `finalizeEpoch` 0.21M, `recordSettlement` 0.20-0.24M per
+  debtor, `payout` 0.18-0.20M, plus ~78k per HSP transfer relayed. Reputation writes add 1.73M
+  every `REPUTATION_EPOCH_STRIDE` epochs. That is about 0.002 HSK per busy epoch on testnet and
+  about **1 HSK on mainnet** (idle epochs cost nothing).
 - **Stablecoins (checked on chain):**
   - mainnet USDC.e `0x054ed45810DbBAb8B27668922D110669c9D88D0a`: "Bridged USDC", 6 decimals,
     Circle FiatToken proxy (implementation `0x82f6…22de`), EIP-712 version "2", supports EIP-3009
