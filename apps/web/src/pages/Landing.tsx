@@ -23,7 +23,7 @@ import {
   IconBolt,
   IconGlobe,
 } from "../components/icons.tsx";
-import { useLive, agentName, type LiveState } from "../lib/api.ts";
+import { useApi, useLive, agentName, type EpochDetail, type LiveState } from "../lib/api.ts";
 import { clock, compact, pct, usd } from "../lib/format.ts";
 import { useNow } from "../components/ui.tsx";
 
@@ -46,7 +46,7 @@ export default function Landing() {
       <Hero live={live} />
       <Features />
       <Netting live={live} />
-      <Connected />
+      <Connected live={live} />
       <Discovery live={live} />
       <Compliance live={live} />
       <Pricing />
@@ -124,7 +124,7 @@ function Hero({ live }: { live: LiveState }) {
 
 const FEATURES = [
   { icon: IconIou, title: "Signed IOUs", desc: "Every paid job is an EIP-712 IOU bound to a quote, an epoch and a nonce." },
-  { icon: IconNet, title: "Multilateral netting", desc: "Hundreds of IOUs collapse into one position per agent." },
+  { icon: IconNet, title: "Multilateral netting", desc: "Every IOU in an epoch collapses into one net position per agent." },
   { icon: IconHsp, title: "Settled through HSP", desc: "Net debtors pay HSP orders with signed mandates, checked on chain." },
   { icon: IconVault, title: "Collateral vault", desc: "Unsettled debt can never exceed locked collateral." },
   { icon: IconScale, title: "Disputes", desc: "Challenge bad work. A staked validator rules on it." },
@@ -159,42 +159,36 @@ function Features() {
 
 // ─────────────────────────────────────────────── netting showcase
 
-const DEMO_IOUS = [
-  ["Orchestrator", "Scout", 4],
-  ["Verifier", "Scout", 4],
-  ["Orchestrator", "Verifier", 20],
-  ["Scout", "Polyglot", 15],
-  ["Polyglot", "Scout", 4],
-  ["Orchestrator", "Scribe", 30],
-  ["Scribe", "Lens", 25],
-  ["Lens", "Scribe", 30],
-  ["Orchestrator", "Polyglot", 15],
-  ["Verifier", "Scout", 4],
-  ["Orchestrator", "Verifier", 20],
-  ["Scribe", "Polyglot", 15],
-] as const;
-
 function Netting({ live }: { live: LiveState }) {
   const [netted, setNetted] = useState(false);
   const last = useMemo(() => {
     const ids = [...live.epochs.values()].filter((e) => e.phase === "sealed" && e.iouCount > 0).sort((a, b) => b.id - a.id);
     return ids[0] ?? null;
   }, [live.epochs]);
-  const nets = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const [b, s, a] of DEMO_IOUS) {
-      m.set(b, (m.get(b) ?? 0) - a);
-      m.set(s, (m.get(s) ?? 0) + a);
+  const { data } = useApi<EpochDetail>(last ? `/v1/epochs/${last.id}` : null);
+  const ious = useMemo(() => (data?.ious ?? []).filter((x) => x.status === "netted"), [data]);
+  const nets = useMemo(() => (data?.positions ?? []).filter((p) => BigInt(p.net) !== 0n).sort((a, b) => Number(BigInt(a.net) - BigInt(b.net))), [data]);
+  // identical IOUs (same buyer, seller and price) share a chip with a count
+  const groups = useMemo(() => {
+    const m = new Map<string, { buyer: string; seller: string; amount: string; n: number }>();
+    for (const x of ious) {
+      const k = `${x.buyer}-${x.seller}-${x.amount}`;
+      const g = m.get(k);
+      if (g) g.n++;
+      else m.set(k, { buyer: x.buyer, seller: x.seller, amount: x.amount, n: 1 });
     }
-    return [...m.entries()].filter(([, v]) => v !== 0);
-  }, []);
+    return [...m.values()];
+  }, [ious]);
+  const shown = groups.slice(0, 12);
+  const more = groups.slice(12).reduce((sum, g) => sum + g.n, 0);
+  const name = (id: string) => agentName(live.agents, id);
   return (
     <section className="netting">
       <div className="section-header">
         <Badge>Clearing</Badge>
         <Title lines={["Many payments in.", "A handful out."]} />
         <p className="section-description">
-          A busy agent makes hundreds of sub-cent calls a minute. Paying each one on chain costs more than the work. Kohaku records them as IOUs and, when the epoch closes, moves only the
+          An agent can make dozens of sub-cent calls a minute. Paying each one on chain costs more than the work. Kohaku records them as IOUs and, when the epoch closes, moves only the
           differences.
         </p>
       </div>
@@ -203,22 +197,32 @@ function Netting({ live }: { live: LiveState }) {
           <RisingStars seed={3} count={60} />
           <div className="horizon-glow" />
           <div className="horizon-arc" />
-          <div className="showcase" onClick={() => setNetted((n) => !n)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setNetted((n) => !n)}>
+          <div className="showcase" onClick={() => data && setNetted((n) => !n)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && data && setNetted((n) => !n)}>
             <div className="showcase-inner">
               <span className="starlight a" />
               <span className="starlight b" />
-              <div className="showcase-title">{netted ? `${DEMO_IOUS.length} IOUs, netted into ${nets.length} transfers` : `${DEMO_IOUS.length} IOUs this epoch (example, in units of $0.0001)`}</div>
-              {!netted && <div className="showcase-cta">Click to net</div>}
+              <div className="showcase-title">
+                {!data
+                  ? live.connected
+                    ? "No sealed epoch yet"
+                    : "Connecting to the clearing service…"
+                  : netted
+                    ? `${data.epoch.iouCount} IOUs, netted into ${data.epoch.settlementTransfers} transfers`
+                    : `Epoch ${data.epoch.id}: ${data.epoch.iouCount} signed IOUs`}
+              </div>
+              {data && !netted && <div className="showcase-cta">Click to net</div>}
               <div className="net-flow">
-                {DEMO_IOUS.map(([b, s, a], i) => (
-                  <span key={i} className={`net-chip ${netted ? "gone" : ""}`} style={{ transitionDelay: `${i * 30}ms` }}>
-                    {b} → {s} {a}
+                {shown.map((g, i) => (
+                  <span key={`${g.buyer}-${g.seller}-${g.amount}`} className={`net-chip ${netted ? "gone" : ""}`} style={{ transitionDelay: `${i * 30}ms` }}>
+                    {name(g.buyer)} → {name(g.seller)} {usd(g.amount, 4)}
+                    {g.n > 1 ? ` ×${g.n}` : ""}
                   </span>
                 ))}
+                {!netted && more > 0 && <span className="net-chip">+{more} more</span>}
                 {netted &&
-                  nets.map(([who, v]) => (
-                    <span key={who} className="net-chip net">
-                      {who} {v > 0 ? `receives ${v}` : `pays ${-v}`}
+                  nets.map((p) => (
+                    <span key={p.agentId} className="net-chip net">
+                      {name(p.agentId)} {BigInt(p.net) > 0n ? `receives ${usd(p.net, 4)}` : `pays ${usd(-BigInt(p.net), 4)}`}
                     </span>
                   ))}
               </div>
@@ -258,16 +262,50 @@ function Netting({ live }: { live: LiveState }) {
 
 // ─────────────────────────────────────────────── agents hire agents
 
-const NODES = [
-  { name: "Scout", rgb: "121, 255, 191", x: 70, y: 135, delay: 1 },
-  { name: "Orchestrator", rgb: "164, 121, 255", x: 214, y: 122, delay: 0, big: true },
-  { name: "Verifier", rgb: "255, 121, 217", x: 145, y: 45, delay: 0.25 },
-  { name: "Polyglot", rgb: "121, 150, 255", x: 342, y: 58, delay: 1.5 },
-  { name: "Scribe", rgb: "255, 193, 121", x: 336, y: 168, delay: 2 },
+const NODE_SLOTS = [
+  { slug: "scout", rgb: "121, 255, 191", x: 70, y: 135, delay: 1 },
+  { slug: "orchestrator", rgb: "164, 121, 255", x: 214, y: 122, delay: 0, big: true },
+  { slug: "verifier", rgb: "255, 121, 217", x: 145, y: 45, delay: 0.25 },
+  { slug: "polyglot", rgb: "121, 150, 255", x: 342, y: 58, delay: 1.5 },
+  { slug: "scribe", rgb: "255, 193, 121", x: 336, y: 168, delay: 2 },
 ];
 
-function Connected() {
+/** A curve between two suppliers that bows away from the orchestrator in the middle. */
+function arc(a: { x: number; y: number }, b: { x: number; y: number }): string {
+  const mx = (a.x + b.x) / 2 + 16;
+  const my = (a.y + b.y) / 2 + 16;
+  const len = Math.hypot(mx - 234, my - 142) || 1;
+  return `M${a.x + 16},${a.y + 16} Q${mx + ((mx - 234) / len) * 60},${my + ((my - 142) / len) * 60} ${b.x + 16},${b.y + 16}`;
+}
+
+function Connected({ live }: { live: LiveState }) {
   const [ref, seen] = useInView<HTMLDivElement>();
+  const nodes = useMemo(
+    () =>
+      NODE_SLOTS.flatMap((n) => {
+        const a = live.agents.find((x) => x.slug === n.slug);
+        return a ? [{ ...n, id: a.agentId, name: a.name }] : [];
+      }),
+    [live.agents],
+  );
+  // a line for every pair of these agents that has traded in the recent feed
+  const edges = useMemo(() => {
+    const traded = new Set(live.ious.map((r) => [r.iou.buyer, r.iou.seller].sort().join("-")));
+    const out: [(typeof nodes)[number], (typeof nodes)[number]][] = [];
+    nodes.forEach((a, i) => nodes.slice(i + 1).forEach((b) => traded.has([a.id, b.id].sort().join("-")) && out.push([a, b])));
+    return out;
+  }, [nodes, live.ious]);
+  const prices = useMemo(() => {
+    const cheapest = new Map<string, { name: string; price: bigint }>();
+    for (const a of live.agents)
+      for (const sv of a.services) {
+        const price = BigInt(sv.price);
+        const cur = cheapest.get(sv.id);
+        if (!cur || price < cur.price) cheapest.set(sv.id, { name: sv.id === "factcheck" ? "fact check" : sv.id, price });
+      }
+    return [...cheapest.values()].sort((x, y) => Number(x.price - y.price)).slice(0, 6);
+  }, [live.agents]);
+  const search = live.agents.flatMap((a) => a.services).find((sv) => sv.id === "search");
   return (
     <section className="connected">
       <RisingStars seed={7} count={70} />
@@ -283,14 +321,27 @@ function Connected() {
           <div className="connected-image">
             <div className={seen ? "in-view" : ""}>
               <svg className="graph-lines" width="468" height="256" viewBox="0 0 468 256" fill="none" style={{ position: "absolute", inset: 0 }}>
-                {NODES.filter((n) => !n.big).map((n, i) => (
-                  <path key={n.name} d={`M${n.x + 16},${n.y + 16} Q${(n.x + 234) / 2},${n.y < 120 ? 60 : 200} 234,142`} stroke={`rgba(${n.rgb},.35)`} strokeWidth="1" style={{ ["--delay" as string]: `${0.5 + i * 0.4}s` }} />
-                ))}
-                <path d="M86,151 Q215,240 352,184" stroke="rgba(255,255,255,.14)" strokeWidth="1" strokeDasharray="3 4" style={{ ["--delay" as string]: "2.2s" }} />
-                <path d="M358,74 Q300,20 161,61" stroke="rgba(255,255,255,.14)" strokeWidth="1" strokeDasharray="3 4" style={{ ["--delay" as string]: "2.4s" }} />
+                {edges.map(([a, b], i) => {
+                  const hub = a.big || b.big;
+                  const [p, q] = b.big ? [a, b] : [b, a];
+                  return (
+                    <path
+                      key={`${a.slug}-${b.slug}`}
+                      d={
+                        hub
+                          ? `M${p.x + 16},${p.y + 16} Q${(p.x + 234) / 2},${p.y < 120 ? 60 : 200} 234,142`
+                          : arc(a, b)
+                      }
+                      stroke={hub ? `rgba(${p.rgb},.35)` : "rgba(255,255,255,.14)"}
+                      strokeWidth="1"
+                      strokeDasharray={hub ? undefined : "3 4"}
+                      style={{ ["--delay" as string]: `${0.5 + i * 0.4}s` }}
+                    />
+                  );
+                })}
               </svg>
-              {NODES.map((n) => (
-                <div key={n.name} className={`graph-node ${n.big ? "big" : ""}`} style={{ left: n.x, top: n.y, ["--rgb" as string]: n.rgb, ["--delay" as string]: `${n.delay}s` }}>
+              {nodes.map((n) => (
+                <div key={n.slug} className={`graph-node ${n.big ? "big" : ""}`} style={{ left: n.x, top: n.y, ["--rgb" as string]: n.rgb, ["--delay" as string]: `${n.delay}s` }}>
                   <i />
                   <em>{n.name}</em>
                 </div>
@@ -308,11 +359,13 @@ function Connected() {
             <div>
               <div className="price-ring">
                 <div className="price-orbit">
-                  {["search $0.0004", "fact check $0.002", "translate $0.0015", "summary $0.003", "chart $0.0025", "verdict $0.01"].map((p, i) => {
-                    const a = (i / 6) * Math.PI * 2;
+                  {prices.map((p, i) => {
+                    const a = (i / prices.length) * Math.PI * 2;
                     return (
-                      <div key={p} style={{ left: `calc(50% + ${Math.cos(a) * 128}px)`, top: `calc(50% + ${Math.sin(a) * 128}px)` }}>
-                        <span>{p}</span>
+                      <div key={p.name} style={{ left: `calc(50% + ${Math.cos(a) * 128}px)`, top: `calc(50% + ${Math.sin(a) * 128}px)` }}>
+                        <span>
+                          {p.name} {usd(p.price, 4)}
+                        </span>
                       </div>
                     );
                   })}
@@ -323,7 +376,7 @@ function Connected() {
           </div>
           <div className="connected-content">
             <div className="connected-text">
-              <span>Sub-cent prices.</span> A search costs $0.0004. Without netting, the transfer would cost more than the work.
+              <span>Sub-cent prices.</span> {search ? `A search costs ${usd(search.price, 4)}.` : "Every agent lists its price per call."} Without netting, the transfer would cost more than the work.
             </div>
           </div>
         </div>
@@ -341,17 +394,26 @@ function Connected() {
 
 // ─────────────────────────────────────────────── discovery radar
 
-const BLIPS = [
-  { x: 395, y: 107, label: "Scout · search" },
-  { x: 203, y: 395, label: "Lens · charts" },
-  { x: 147, y: 251, label: "Verifier · fact check" },
-  { x: 299, y: 228, label: "Polyglot · Hindi" },
-  { x: 645, y: 251, label: "Scribe · summary" },
-  { x: 491, y: 229, label: "Arbiter · verdicts" },
-  { x: 587, y: 395, label: "Rogue · cheap" },
+const BLIP_SLOTS = [
+  { x: 395, y: 107 },
+  { x: 203, y: 395 },
+  { x: 147, y: 251 },
+  { x: 299, y: 228 },
+  { x: 645, y: 251 },
+  { x: 491, y: 229 },
+  { x: 587, y: 395 },
 ];
 
 function Discovery({ live }: { live: LiveState }) {
+  const blips = useMemo(
+    () =>
+      live.agents
+        .filter((a) => a.slug !== "orchestrator" && a.services.length > 0)
+        .sort((a, b) => Number(a.agentId) - Number(b.agentId))
+        .slice(0, BLIP_SLOTS.length)
+        .map((a, i) => ({ ...BLIP_SLOTS[i]!, label: `${a.name} · ${a.services[0]!.name.toLowerCase()}` })),
+    [live.agents],
+  );
   return (
     <section className="discovery">
       <div className="radar-wrap">
@@ -362,7 +424,7 @@ function Discovery({ live }: { live: LiveState }) {
             ))}
           </div>
           <div className="radar-scanner" />
-          {BLIPS.map((b) => {
+          {blips.map((b) => {
             const angle = (Math.atan2(b.y - 445, b.x - 445) * 180) / Math.PI;
             const delay = (((angle + 201 + 360) % 360) / 360) * 10;
             return (
@@ -406,9 +468,11 @@ function Discovery({ live }: { live: LiveState }) {
 
 function Compliance({ live }: { live: LiveState }) {
   const text = useMemo(() => {
-    const hashes = live.ious.slice(0, 120).map((x) => x.iou.digest.slice(2));
-    const seed = hashes.length ? hashes : Array.from({ length: 90 }, (_, i) => (i * 2654435761 >>> 0).toString(16).padStart(8, "0").repeat(8));
-    return seed.join(" ").slice(0, 9000);
+    return live.ious
+      .slice(0, 120)
+      .map((x) => x.iou.digest.slice(2))
+      .join(" ")
+      .slice(0, 9000);
   }, [live.ious.length > 0 ? live.ious[0]!.iou.digest : ""]);
   const mode = live.stats?.hsp.mode;
   return (
@@ -662,7 +726,7 @@ function Cta() {
       <div className="section-header">
         <Badge>Get started</Badge>
         <Title lines={["Clear the agent economy"]} />
-        <p className="section-description">Hundreds of payments in. A handful out. Every one of them receipted.</p>
+        <p className="section-description">Many payments in. A handful out. Every one of them receipted.</p>
       </div>
       <Btn to="/floor" size="lg">
         Open the live floor

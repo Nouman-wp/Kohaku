@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router";
-import type { DisputeView, EpochView, IouView, PayoutView, PositionView, SettlementView } from "@kohaku/core";
-import { API, useApi, useLive, agentName } from "../lib/api.ts";
+import type { EpochView } from "@kohaku/core";
+import { API, useApi, useLive, agentName, type EpochDetail } from "../lib/api.ts";
 import { ago, pct, short, signedUsd, usd, explorerTx, explorerAddr } from "../lib/format.ts";
 import { AgentGem, Badge, Btn, Empty, HashLink, Panel, Pill, Stat } from "../components/ui.tsx";
 
@@ -79,17 +79,6 @@ export function EpochList() {
       </div>
     </main>
   );
-}
-
-interface EpochDetail {
-  epoch: EpochView;
-  ious: IouView[];
-  positions: PositionView[];
-  settlements: SettlementView[];
-  payouts: PayoutView[];
-  disputes: DisputeView[];
-  txs: { hash: string; kind: string; gas_used: number | null; at: number }[];
-  explorer: string | null;
 }
 
 export function EpochPage() {

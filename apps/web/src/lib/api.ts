@@ -63,6 +63,18 @@ export function useApi<T>(path: string | null, refreshMs = 0): { data: T | null;
   return { data, error, loading, reload: () => setTick((x) => x + 1) };
 }
 
+/** GET /v1/epochs/:id */
+export interface EpochDetail {
+  epoch: EpochView;
+  ious: IouView[];
+  positions: PositionView[];
+  settlements: SettlementView[];
+  payouts: PayoutView[];
+  disputes: DisputeView[];
+  txs: { hash: string; kind: string; gas_used: number | null; at: number }[];
+  explorer: string | null;
+}
+
 // ─────────────────────────────────────────────── live store (WebSocket)
 
 export interface FloorIou {
