@@ -272,6 +272,8 @@ export class Db {
       "ALTER TABLE settlements ADD COLUMN hsp_order_json TEXT",
       "ALTER TABLE settlements ADD COLUMN hsp_attempt INTEGER NOT NULL DEFAULT 0",
       "CREATE UNIQUE INDEX IF NOT EXISTS settlements_cart ON settlements(hsp_cart_id) WHERE hsp_cart_id IS NOT NULL",
+      // earlier versions lost the payout hash when the seal ran on a later tick; the payouts table kept it
+      "UPDATE epochs SET payout_tx = (SELECT tx FROM payouts WHERE payouts.epoch = epochs.id AND tx IS NOT NULL LIMIT 1) WHERE payout_tx IS NULL",
     ]) {
       try {
         this.raw.exec(sql);

@@ -221,10 +221,17 @@ export class EpochEngine {
     if (chainNext < e.id) throw new Error(`waiting for epoch ${chainNext} to finalise on chain first`);
     if (chainNext === e.id) await this.post(e.id, heldOut, carried, normal, result);
 
-    // 5. read back what the chain computed and open settlement
-    const ce = await this.chain.epoch(BigInt(e.id));
+    // 5. read back what the chain computed and open settlement (a load-balanced RPC can
+    //    answer from a node that has not seen the finalise yet, so re-read before failing)
+    let ce = await this.chain.epoch(BigInt(e.id));
+    for (let i = 0; i < 5 && (ce.iouSetHash !== result.iouSetHash || ce.positionsHash !== result.positionsHash); i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      ce = await this.chain.epoch(BigInt(e.id));
+    }
     if (ce.iouSetHash !== result.iouSetHash || ce.positionsHash !== result.positionsHash) {
-      throw new Error(`chain result for epoch ${e.id} differs from the local ledger (set ${ce.iouSetHash} vs ${result.iouSetHash})`);
+      throw new Error(
+        `chain result for epoch ${e.id} differs from the local ledger (set ${ce.iouSetHash} vs ${result.iouSetHash}, positions ${ce.positionsHash} vs ${result.positionsHash})`,
+      );
     }
     const byId = new Map(result.positions.map((p) => [p.agentId.toString(), p]));
     const debtors = result.positions.filter((p) => p.net < 0n).map((p) => ({ agentId: p.agentId, owed: -p.net }));

@@ -356,9 +356,12 @@ export class Settlements {
     this.paying.add(epochId);
     try {
       this.db.run("UPDATE epochs SET phase = 'paying' WHERE id = ? AND phase = 'settling'", epochId);
+      // a payout that already went through is never sent again, even if a lagging RPC
+      // node still reports the epoch as unpaid (the second one would only revert)
+      const paid = this.db.get<{ payout_tx: string | null }>("SELECT payout_tx FROM epochs WHERE id = ?", epochId)?.payout_tx ?? null;
+      let txHash = paid as Hex | null;
       const chainE = await this.chain.epoch(BigInt(epochId));
-      let txHash: Hex | null = null;
-      if (chainE.status === 2) {
+      if (!paid && chainE.status === 2) {
         const receipt = await this.chain.write(`payout e${epochId}`, {
           address: this.chain.d.clearingHouse,
           abi: abis.clearingHouseAbi,
@@ -366,6 +369,7 @@ export class Settlements {
           args: [BigInt(epochId)],
         });
         txHash = receipt.transactionHash;
+        this.db.run("UPDATE epochs SET payout_tx = ? WHERE id = ?", txHash, epochId);
         const logs = parseEventLogs({ abi: abis.clearingHouseAbi, logs: receipt.logs, eventName: "CreditorPaid" });
         for (const l of logs) {
           const a = l.args as { epochId: bigint; agentId: bigint; to: Hex; amount: bigint };
@@ -389,7 +393,12 @@ export class Settlements {
   }
 
   async seal(epochId: number, payoutTx: Hex | null): Promise<void> {
-    const chainE = await this.chain.epoch(BigInt(epochId));
+    let chainE = await this.chain.epoch(BigInt(epochId));
+    // right after the payout a lagging RPC node can still report the epoch as unpaid
+    for (let i = 0; payoutTx && chainE.status !== 3 && i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      chainE = await this.chain.epoch(BigInt(epochId));
+    }
     if (chainE.status !== 3) return;
     this.db.tx(() => {
       this.db.run(
