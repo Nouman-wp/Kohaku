@@ -62,7 +62,7 @@ const sealed = await until(async () => {
 }, "every debtor to settle through HSP and the epoch to seal", 300_000);
 const recorded = sealed.settlements.filter((s) => s.status === "recorded");
 check("every debtor settled through HSP", recorded.length === sealed.settlements.length, `${recorded.length}/${sealed.settlements.length}`);
-check("each settlement has an HSP payment id and transfer", recorded.every((s) => s.hspPaymentId && s.settlementTx && s.recordTx));
+check("each settlement went through an HSP order, transfer and record", recorded.every((s) => s.hspCartMandateId && s.hspStatus === "payment-successful" && s.settlementTx && s.recordTx));
 check("creditors were paid out", sealed.payouts.length === sealed.epoch.creditors, `${sealed.payouts.length} payouts`);
 check("epoch receipt sealed", !!sealed.epoch.receiptHash);
 const sum = sealed.positions.reduce((a, p) => a + BigInt(p.net), 0n);

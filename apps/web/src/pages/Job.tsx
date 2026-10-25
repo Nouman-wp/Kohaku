@@ -218,13 +218,13 @@ export default function JobPage() {
                 <dd>
                   {agentName(live.agents, data.buyerSettlement.agentId)} paid its net {usd(data.buyerSettlement.amount, 4)} for the whole epoch
                 </dd>
-                <dt>HSP payment id</dt>
+                <dt>HSP order</dt>
                 <dd>
-                  <HashLink hash={data.buyerSettlement.hspPaymentId} n={8} />
+                  <HashLink hash={data.buyerSettlement.hspCartMandateId} href={data.buyerSettlement.hspPaymentUrl} n={12} />
                 </dd>
                 <dt>Outcome</dt>
                 <dd>
-                  {data.buyerSettlement.hspStatus ?? "—"} / {data.buyerSettlement.hspOutcome ?? data.buyerSettlement.status} <span className="muted">({data.buyerSettlement.hspMode === "local" ? "HSP local adapter" : "HSP Coordinator"})</span>
+                  {data.buyerSettlement.hspStatus ?? "—"} / {data.buyerSettlement.hspOutcome ?? data.buyerSettlement.status} <span className="muted">({data.buyerSettlement.hspMode === "local" ? "HSP local gateway" : "HashKey Merchant"})</span>
                 </dd>
                 <dt>Wallet → pool transfer</dt>
                 <dd>

@@ -4,7 +4,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { formatUnits } from "@kohaku/core";
 import {
   ClearingClient,
-  CoordinatorHspPayer,
   KohakuAgent,
   Operator,
   end,
@@ -18,6 +17,9 @@ import { installOrchestrator, runBrief, TOPICS, type BriefRecord } from "./agent
 import { installLens, installPolyglot, installRogue, installScout, installScribe, installVerifier } from "./agents/workers.ts";
 
 type Slug = "orchestrator" | "scout" | "verifier" | "polyglot" | "scribe" | "lens" | "arbiter" | "rogue";
+
+/** The validator stakes and answers on chain itself; everyone else only signs. */
+const NEEDS_GAS = new Set<Slug>(["arbiter"]);
 
 interface FleetMember {
   slug: Slug;
@@ -147,17 +149,6 @@ export class Fleet {
     for (const m of MEMBERS) {
       const agent = await KohakuAgent.connect({ privateKey: agentKey(this.cfg.seed, m.slug), clearingUrl: this.cfg.clearingUrl, rpcUrl: this.cfg.rpcUrl });
       agent.setProfile({ ...m.profile, slug: m.slug, baseUrl: `${this.cfg.publicUrl}/agents/${m.slug}` });
-      if (this.cfg.hspMode === "coordinator" && this.cfg.hsp.sdkPath && this.cfg.hsp.coordinatorUrl && this.cfg.hsp.apiKey) {
-        agent.useHsp(
-          new CoordinatorHspPayer({
-            sdkPath: this.cfg.hsp.sdkPath,
-            coordinatorUrl: this.cfg.hsp.coordinatorUrl,
-            apiKey: this.cfg.hsp.apiKey,
-            privateKey: agentKey(this.cfg.seed, m.slug),
-            chainName: this.cfg.hsp.chainName ?? clearingCfg.hsp.chain,
-          }),
-        );
-      }
       m.install(this, agent);
       this.agents.set(m.slug, agent);
     }
@@ -197,29 +188,30 @@ export class Fleet {
   }
 
   private async fund(): Promise<void> {
-    const local = this.cfg.chain === "local";
     for (const m of MEMBERS) {
       try {
-        await this.fundOne(m, local);
+        await this.fundOne(m);
       } catch (err) {
         this.log(m.slug, `funding failed: ${(err as Error).message}`);
       }
     }
   }
 
-  private async fundOne(m: FleetMember, local: boolean): Promise<void> {
+  private async fundOne(m: FleetMember): Promise<void> {
     const agent = this.agents.get(m.slug)!;
     const op = m.operator === "rogue" ? this.rogueOperator : this.operator;
     const target = m.slug === "orchestrator" ? this.cfg.orchestratorCollateral : this.cfg.collateralTarget;
-    await this.ensureTokens(op, op.address, target + this.cfg.walletTarget, local);
+    await this.ensureTokens(op, op.address, target + this.cfg.walletTarget);
     const added = await op.topUpCollateral(agent.agentId, target);
     if (added > 0n) this.log(m.slug, `collateral topped up by ${formatUnits(added)} USDC`);
     const bal = await op.tokenBalance(agent.address);
     if (bal < this.cfg.walletTarget / 2n) {
-      if (local && op.cfg.deployment.mockToken) await op.mintTestTokens(agent.address, this.cfg.walletTarget - bal);
+      if (op.cfg.deployment.mockToken) await op.mintTestTokens(agent.address, this.cfg.walletTarget - bal);
       else if ((await op.tokenBalance()) >= this.cfg.walletTarget - bal) await op.transferToken(agent.address, this.cfg.walletTarget - bal);
       else this.log(m.slug, `wallet low (${formatUnits(bal)} USDC) and operator cannot top it up`);
     }
+    // HSP relays every settlement, so only agents that send their own transactions need gas
+    if (!NEEDS_GAS.has(m.slug)) return;
     const gas = await agent.publicClient.getBalance({ address: agent.address });
     if (gas < this.cfg.gasTarget / 2n) {
       const opGas = await op.publicClient.getBalance({ address: op.address });
@@ -228,10 +220,10 @@ export class Fleet {
     }
   }
 
-  private async ensureTokens(op: Operator, who: Hex, need: bigint, local: boolean): Promise<void> {
+  private async ensureTokens(op: Operator, who: Hex, need: bigint): Promise<void> {
     const bal = await op.tokenBalance(who);
     if (bal >= need) return;
-    if (local && op.cfg.deployment.mockToken) {
+    if (op.cfg.deployment.mockToken) {
       let missing = need - bal;
       while (missing > 0n) {
         const chunk = missing > 10_000n * 10n ** 6n ? 10_000n * 10n ** 6n : missing;
@@ -410,12 +402,11 @@ export class Fleet {
     const pk = (await import("viem/accounts")).generatePrivateKey();
     const account = privateKeyToAccount(pk);
     const agentId = await this.operator.ensureRegistered(account.address, `${this.cfg.publicUrl}/guests/${account.address}/registration.json`);
-    const local = this.cfg.chain === "local";
-    await this.ensureTokens(this.operator, this.operator.address, USD(3), local);
+    await this.ensureTokens(this.operator, this.operator.address, USD(3));
     await this.operator.deposit(agentId, USD(1));
-    if (local && this.operator.cfg.deployment.mockToken) await this.operator.mintTestTokens(account.address, USD(1));
+    // a guest pays its debts through HSP, which relays them: it needs tokens, not gas
+    if (this.operator.cfg.deployment.mockToken) await this.operator.mintTestTokens(account.address, USD(1));
     else await this.operator.transferToken(account.address, USD(1));
-    await this.operator.sendGas(account.address, this.cfg.gasTarget / 4n);
     const now = BigInt(Math.floor(Date.now() / 1000));
     const view = await this.operator.authorise(this.client, {
       buyer: agentId,

@@ -94,6 +94,11 @@ export interface SettlementRow {
   amount: number;
   status: string;
   hsp_mode: string;
+  hsp_cart_id: string | null;
+  hsp_flow_id: string | null;
+  hsp_payment_url: string | null;
+  hsp_order_json: string | null;
+  hsp_attempt: number;
   hsp_payment_id: string | null;
   hsp_status: string | null;
   hsp_outcome: string | null;
@@ -237,7 +242,10 @@ export function settlementView(r: SettlementRow): SettlementView {
     amount: String(r.amount),
     status: r.status as SettlementView["status"],
     hspMode: r.hsp_mode as SettlementView["hspMode"],
-    hspPaymentId: r.hsp_payment_id as Hex | null,
+    hspCartMandateId: r.hsp_cart_id,
+    hspFlowId: r.hsp_flow_id,
+    hspPaymentUrl: r.hsp_payment_url,
+    hspPaymentId: r.hsp_payment_id,
     hspStatus: r.hsp_status,
     hspOutcome: r.hsp_outcome,
     settlementTx: r.settlement_tx as Hex | null,

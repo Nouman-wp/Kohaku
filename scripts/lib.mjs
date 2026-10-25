@@ -14,8 +14,13 @@ export const ANVIL_KEYS = [
   "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
 ];
 
+/** The env file in use: KOHAKU_ENV_FILE (e.g. .env.testnet) or .env. */
+export function envPath() {
+  return join(ROOT, process.env.KOHAKU_ENV_FILE ?? ".env");
+}
+
 export function loadEnv() {
-  const file = join(ROOT, ".env");
+  const file = envPath();
   if (!existsSync(file)) return {};
   const env = {};
   for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {

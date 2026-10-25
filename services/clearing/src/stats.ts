@@ -32,7 +32,7 @@ export function headlineStats(db: Db, chain: Chain, hsp: HspPort, epochs: EpochE
     epochPhase: "intake",
     phaseEndsAt: cur.intake_ends_at,
     chain: { key: chain.key, id: chain.viemChain.id, name: chain.viemChain.name, explorer: chain.explorer },
-    hsp: { mode: info.mode, coordinatorUrl: info.coordinatorUrl, healthy: hspHealthy, note: info.note },
+    hsp: { mode: info.mode, gatewayUrl: info.gatewayUrl, healthy: hspHealthy, note: info.note },
     deployment: {
       token: chain.d.token,
       identityRegistry: chain.d.identityRegistry,

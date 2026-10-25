@@ -4,6 +4,8 @@
  * or numbers. Nothing here is a bigint, so it all survives JSON.
  */
 
+import type { HspMode } from "./hsp.ts";
+
 export type Hex = `0x${string}`;
 
 export type EpochPhase =
@@ -23,7 +25,6 @@ export type SettlementStatus =
   | "defaulted"
   | "failed";
 
-export type HspMode = "coordinator" | "local";
 
 export interface ServiceListing {
   id: string; // e.g. "search"
@@ -151,7 +152,12 @@ export interface SettlementView {
   amount: string;
   status: SettlementStatus;
   hspMode: HspMode;
-  hspPaymentId: Hex | null;
+  /** HSP order: cart mandate id, checkout flow id and hosted payment page */
+  hspCartMandateId: string | null;
+  hspFlowId: string | null;
+  hspPaymentUrl: string | null;
+  /** HSP payment request id */
+  hspPaymentId: string | null;
   hspStatus: string | null;
   hspOutcome: string | null;
   settlementTx: Hex | null;
@@ -226,7 +232,7 @@ export interface HeadlineStats {
   epochPhase: EpochPhase;
   phaseEndsAt: number;
   chain: { key: string; id: number; name: string; explorer: string | null };
-  hsp: { mode: HspMode; coordinatorUrl: string | null; healthy: boolean; note: string };
+  hsp: { mode: HspMode; gatewayUrl: string; healthy: boolean; note: string };
   deployment: Record<string, string> | null;
 }
 

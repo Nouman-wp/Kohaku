@@ -6,7 +6,8 @@
   "description": "Kohaku protocol primitives: EIP-712 types, netting, commitments, reputation formula, chain config.",
   "exports": {
     ".": "./src/index.ts",
-    "./abis": "./src/abis.ts"
+    "./abis": "./src/abis.ts",
+    "./hsp-node": "./src/hsp-node.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

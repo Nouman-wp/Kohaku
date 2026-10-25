@@ -33,7 +33,7 @@ export const CHAINS: Record<ChainKey, Chain> = {
   hashkey,
 };
 
-/** HSP's name for each network, as used by the Coordinator (`GET /chains`). */
+/** HSP's network name, carried in a cart mandate's x402 method data (override with HSP_NETWORK). */
 export const HSP_CHAIN_NAMES: Record<ChainKey, string> = {
   local: "local",
   "hashkey-testnet": "hashkey-testnet",

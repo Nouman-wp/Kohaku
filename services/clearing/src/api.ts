@@ -13,6 +13,7 @@ import type { Ledger, SubmitIouInput } from "./ledger.ts";
 import type { EpochEngine } from "./epochs.ts";
 import type { Settlements } from "./settlements.ts";
 import type { HspPort } from "./hsp/port.ts";
+import type { LocalHspGateway } from "./hsp/gateway.ts";
 import { acceptWebhook } from "./hsp/webhook.ts";
 import { headlineStats } from "./stats.ts";
 import { verifyEpoch } from "./verify.ts";
@@ -45,6 +46,8 @@ export interface Ctx {
   epochs: EpochEngine;
   settlements: Settlements;
   hsp: HspPort;
+  /** Kohaku's local HSP gateway, mounted at /hsp when HSP_MODE=local */
+  gateway?: LocalHspGateway;
   domain: TypedDataDomain;
   hspHealthy: () => boolean;
 }
@@ -492,19 +495,20 @@ export async function buildApi(ctx: Ctx): Promise<FastifyInstance> {
 
   app.get("/v1/hsp", async () => ({ ...hsp.info(), healthy: ctx.hspHealthy() }));
 
+  // HashKey Merchant webhook format; HSP's ack convention is { code: 0 }
   app.post("/v1/hsp/webhook", async (req, reply) => {
-    const r = acceptWebhook(db, cfg.HSP_WEBHOOK_SECRET, req.headers, req.rawBody ?? "");
+    const r = acceptWebhook(db, cfg.hspAppSecret, req.headers, req.rawBody ?? "");
     if (!r.ok) {
       log("warn", "hsp", `webhook rejected: ${r.reason}`);
-      return reply.status(r.status).send({ error: r.reason });
+      return reply.status(r.status).send({ code: r.status, msg: r.reason });
     }
-    if (r.duplicate) return { ok: true, duplicate: true };
-    if (r.event.paymentId) {
-      const s = settlements.byPaymentId(r.event.paymentId);
-      if (s) void settlements.process(s.id);
-    }
-    return { ok: true };
+    if (r.duplicate) return { code: 0, duplicate: true };
+    const s = r.event.cartMandateId ? settlements.byCartMandateId(r.event.cartMandateId) : undefined;
+    if (s) void settlements.onHspEvent(s.hsp_cart_id!);
+    return { code: 0 };
   });
+
+  ctx.gateway?.mount(app, "/hsp");
 
   // ---------------------------------------------------------------- scenario runner (demo control)
 

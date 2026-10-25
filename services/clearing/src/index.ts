@@ -1,5 +1,7 @@
-import { keccak256, concat, stringToHex, type Hex } from "viem";
+import type { Hex } from "viem";
 import { kohakuDomain, HSP_CHAIN_NAMES } from "@kohaku/core";
+import { mockUsdcAbi } from "@kohaku/core/abis";
+import { merchantKey } from "@kohaku/core/hsp-node";
 import { loadConfig } from "./config.ts";
 import { Db } from "./db.ts";
 import { Chain } from "./chain.ts";
@@ -9,9 +11,8 @@ import { Intents } from "./intents.ts";
 import { Ledger } from "./ledger.ts";
 import { EpochEngine } from "./epochs.ts";
 import { Settlements } from "./settlements.ts";
-import { LocalHsp } from "./hsp/local.ts";
-import { CoordinatorHsp } from "./hsp/coordinator.ts";
-import type { HspPort } from "./hsp/port.ts";
+import { HspMerchantClient, MerchantHsp } from "./hsp/merchant.ts";
+import { LocalHspGateway } from "./hsp/gateway.ts";
 import { buildApi } from "./api.ts";
 import { bus, log } from "./bus.ts";
 import { headlineStats } from "./stats.ts";
@@ -30,20 +31,58 @@ async function main(): Promise<void> {
   const rep = new ReputationBook(db);
   const intents = new Intents(db, registry, domain);
 
-  let hsp: HspPort;
-  if (cfg.hspMode === "coordinator") {
-    if (!cfg.HSP_COORDINATOR_URL) throw new Error("HSP_MODE=coordinator needs HSP_COORDINATOR_URL (and HSP_API_KEY)");
-    const c = new CoordinatorHsp(chain.publicClient, cfg.HSP_COORDINATOR_URL, cfg.HSP_API_KEY, cfg.HSP_CHAIN_NAME ?? HSP_CHAIN_NAMES[cfg.chain], cfg.HSP_ADAPTER_ADDRESS, cfg.HSP_SDK_PATH);
-    await c.init();
-    hsp = c;
-  } else {
-    const adapterKey = (cfg.HSP_LOCAL_ADAPTER_KEY ?? keccak256(concat([cfg.CLEARER_PRIVATE_KEY as Hex, stringToHex("kohaku/hsp-local-adapter")]))) as Hex;
-    hsp = new LocalHsp(chain.publicClient, chain.viemChain.id, HSP_CHAIN_NAMES[cfg.chain], adapterKey, {
-      url: `http://127.0.0.1:${cfg.PORT}/v1/hsp/webhook`,
-      secret: cfg.HSP_WEBHOOK_SECRET,
-    });
+  // HSP: the clearing service is the merchant. In local mode it also runs the gateway that
+  // stands in for HashKey Merchant (same API); in merchant mode it talks to HashKey.
+  const read = <T,>(functionName: string, fallback: T) =>
+    chain.publicClient.readContract({ address: cfg.deployment.token, abi: mockUsdcAbi, functionName } as never).then((v) => v as T, () => fallback);
+  const token = {
+    address: cfg.deployment.token,
+    name: await read<string>("name", "USD Coin"),
+    symbol: await read<string>("symbol", "USDC"),
+    version: await read<string>("version", "2"),
+    decimals: await read<number>("decimals", 6),
+  };
+  const network = cfg.HSP_NETWORK ?? HSP_CHAIN_NAMES[cfg.chain];
+  const key = merchantKey(cfg.hspMerchantKey);
+  const local = cfg.hspMode === "local";
+  const gatewayPublic = `${cfg.PUBLIC_API_URL.replace(/\/+$/, "")}/hsp`;
+  const api = new HspMerchantClient({
+    baseUrl: local ? `http://127.0.0.1:${cfg.PORT}/hsp` : cfg.HSP_BASE_URL!.replace(/\/+$/, ""),
+    appKey: cfg.hspAppKey,
+    appSecret: cfg.hspAppSecret,
+    merchantName: cfg.HSP_MERCHANT_NAME,
+    merchantKey: key,
+  });
+  const gateway = local
+    ? new LocalHspGateway(db, chain.publicClient, {
+        chain: chain.viemChain,
+        rpcUrl: cfg.rpcUrl,
+        network,
+        token,
+        relayerKey: cfg.hspRelayerKey,
+        merchant: { appKey: cfg.hspAppKey, appSecret: cfg.hspAppSecret, publicKey: key, webhookUrl: `http://127.0.0.1:${cfg.PORT}/v1/hsp/webhook` },
+        publicUrl: gatewayPublic,
+      })
+    : undefined;
+  const hsp = new MerchantHsp(chain.publicClient, api, {
+    mode: cfg.hspMode,
+    chainId: chain.viemChain.id,
+    network,
+    coin: cfg.HSP_COIN,
+    decimals: token.decimals,
+    payerGatewayUrl: local ? gatewayPublic : cfg.HSP_BASE_URL!.replace(/\/+$/, ""),
+    redirectUrl: cfg.HSP_REDIRECT_URL,
+    cartTtlSeconds: cfg.HSP_CART_TTL_SECONDS,
+    note: local
+      ? `HSP local gateway: Kohaku serves HashKey Merchant's API itself (cart mandate → payment mandate → EIP-3009 transfer relayed on chain → signed webhook). Transfers are real on-chain payments of ${token.symbol}; HashKey is not involved. Relayer ${gateway!.relayerAddress}.`
+      : `HashKey Merchant (HSP) at ${cfg.HSP_BASE_URL}, merchant "${cfg.HSP_MERCHANT_NAME}". Debtors pay through HSP; HSP relays each EIP-3009 authorization on chain.`,
+  });
+  let hspHealthy = false;
+  if (gateway && cfg.chain === "local") {
+    // on a devnet the clearer has plenty: keep the gateway's relayer topped up
+    const bal = await chain.publicClient.getBalance({ address: gateway.relayerAddress });
+    if (bal < 10n ** 18n) await chain.sendValue(gateway.relayerAddress, 10n ** 19n);
   }
-  let hspHealthy = await hsp.health();
 
   // eslint-disable-next-line prefer-const
   let epochs: EpochEngine;
@@ -56,14 +95,16 @@ async function main(): Promise<void> {
     writeReputation: cfg.WRITE_REPUTATION_ONCHAIN === "true",
     reputationStride: cfg.REPUTATION_EPOCH_STRIDE,
     publicUrl: cfg.PUBLIC_API_URL,
+    extendIdle: cfg.extendIdleEpochs,
   });
   const ledger = new Ledger(db, registry, intents, rep, chain, domain, cfg.deployment.token, { disputeWindowSeconds: cfg.DISPUTE_WINDOW_SECONDS, publicUrl: cfg.PUBLIC_API_URL }, () =>
     epochs.intake(),
   );
   await epochs.start();
 
-  const app = await buildApi({ cfg, db, chain, registry, rep, intents, ledger, epochs, settlements, hsp, domain, hspHealthy: () => hspHealthy });
+  const app = await buildApi({ cfg, db, chain, registry, rep, intents, ledger, epochs, settlements, hsp, gateway, domain, hspHealthy: () => hspHealthy });
   await app.listen({ port: cfg.PORT, host: "0.0.0.0" });
+  hspHealthy = await hsp.health();
 
   setInterval(() => void registry.sync(), 5_000);
   setInterval(() => void settlements.tick().catch((err) => log("warn", "settlement", (err as Error).message)), 2_000);
@@ -79,7 +120,7 @@ async function main(): Promise<void> {
     }
   }, 2_000);
 
-  log("info", "clearing", `Kohaku clearing service on :${cfg.PORT} | chain ${cfg.chain} (${chain.viemChain.id}) | clearing house ${cfg.deployment.clearingHouse} | HSP ${hsp.mode}`);
+  log("info", "clearing", `Kohaku clearing service on :${cfg.PORT} | chain ${cfg.chain} (${chain.viemChain.id}) | clearing house ${cfg.deployment.clearingHouse} | HSP ${local ? "local gateway" : `merchant ${cfg.HSP_BASE_URL}`}${hspHealthy ? "" : " (unreachable)"}`);
 
   const shutdown = async () => {
     epochs.stop();

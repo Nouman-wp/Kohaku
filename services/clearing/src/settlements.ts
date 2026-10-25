@@ -1,10 +1,10 @@
-import { isHex, keccak256, parseEventLogs, stringToHex, type Hex } from "viem";
+import { keccak256, parseEventLogs, stringToHex, type Hex } from "viem";
 import { settlementOrderRef, type PaymentReport, type SettlementOrder } from "@kohaku/core";
 import type { Db } from "./db.ts";
 import type { Chain } from "./chain.ts";
 import { abis } from "./chain.ts";
 import type { Registry } from "./registry.ts";
-import type { HspPort } from "./hsp/port.ts";
+import type { HspOrder, HspPort } from "./hsp/port.ts";
 import { bus, log } from "./bus.ts";
 import { epochView, payoutView, settlementView, type EpochRow, type PayoutRow, type SettlementRow } from "./views.ts";
 
@@ -16,14 +16,20 @@ const DEFAULT_GRACE_MS = 3_000;
  *   awaiting_payment -> submitted -> verified -> recorded      (paid through HSP)
  *   awaiting_payment -> defaulted                              (missed the deadline)
  *
- * A settlement is only ever marked paid after HSP verification ACCEPTs *and* Kohaku has
- * independently seen the exact transfer on chain *and* the clearing house accepted the
- * record (which re-checks that the money is in the pool). If HSP is down, verification
- * returns RETRYABLE and the settlement simply stays pending and is retried.
+ * For every debt the clearing service (the HSP merchant) opens an HSP order: a cart mandate
+ * paying the exact net amount to the clearing pool. The debtor pays it through HSP. A
+ * settlement is only ever marked paid after HSP reports the payment successful *and*
+ * Kohaku has independently seen the exact transfer, consuming this debt's authorization,
+ * on chain *and* the clearing house accepted the record (which re-checks that the money is
+ * in the pool). If HSP is down, verification returns RETRYABLE and the settlement simply
+ * stays pending and is retried.
  */
 export class Settlements {
   private inflight = new Set<string>();
   private paying = new Set<number>();
+  private opening = new Set<string>();
+  private failures = new Map<string, number>();
+  private polledAt = new Map<string, number>();
 
   constructor(
     private readonly db: Db,
@@ -51,6 +57,51 @@ export class Settlements {
       );
       this.emit(settlementId(epoch, d.agentId));
     }
+    void this.openOrders();
+  }
+
+  /** Open the HSP order for every debt that does not have one yet. Retried on every tick. */
+  async openOrders(): Promise<void> {
+    const rows = this.db.all<SettlementRow>("SELECT * FROM settlements WHERE status = 'awaiting_payment' AND hsp_cart_id IS NULL ORDER BY epoch, agent_id");
+    for (const row of rows) {
+      if (this.opening.has(row.id)) continue;
+      this.opening.add(row.id);
+      try {
+        const o = await this.hsp.open(this.hspOrder(row));
+        this.db.run(
+          "UPDATE settlements SET hsp_cart_id = ?, hsp_payment_id = ?, hsp_flow_id = ?, hsp_payment_url = ?, hsp_order_json = ?, hsp_status = 'payment-required', error = NULL, updated_at = ? WHERE id = ?",
+          o.cartMandateId,
+          o.paymentRequestId,
+          o.flowId,
+          o.paymentUrl,
+          JSON.stringify(o.request),
+          Date.now(),
+          row.id,
+        );
+        log("info", "hsp", `${row.id}: HSP order ${o.cartMandateId} opened for ${row.amount} (flow ${o.flowId ?? "?"})`);
+        this.emit(row.id);
+      } catch (err) {
+        this.db.run("UPDATE settlements SET error = ?, updated_at = ? WHERE id = ?", `opening HSP order: ${(err as Error).message}`, Date.now(), row.id);
+      } finally {
+        this.opening.delete(row.id);
+      }
+    }
+  }
+
+  private hspOrder(row: SettlementRow): HspOrder {
+    const agent = this.registry.get(row.agent_id);
+    const o = this.order(row);
+    return {
+      id: row.id,
+      epoch: BigInt(row.epoch),
+      agentId: BigInt(row.agent_id),
+      amount: BigInt(row.amount),
+      payer: agent?.signer ?? "0x0000000000000000000000000000000000000000",
+      payTo: o.payTo,
+      token: o.token,
+      orderRef: o.orderRef,
+      attempt: row.hsp_attempt ?? 0,
+    };
   }
 
   order(row: SettlementRow): SettlementOrder {
@@ -65,6 +116,15 @@ export class Settlements {
       orderRef: settlementOrderRef(this.chain.viemChain.id, this.chain.d.clearingHouse, BigInt(row.epoch), BigInt(row.agent_id), BigInt(row.amount)),
       deadline: row.deadline,
       hspMode: row.hsp_mode as SettlementOrder["hspMode"],
+      hsp: row.hsp_cart_id
+        ? {
+            gatewayUrl: this.hsp.info().gatewayUrl,
+            cartMandateId: row.hsp_cart_id,
+            paymentRequestId: row.hsp_payment_id ?? "",
+            flowId: row.hsp_flow_id,
+            paymentUrl: row.hsp_payment_url,
+          }
+        : null,
     };
   }
 
@@ -100,19 +160,17 @@ export class Settlements {
     if (!row) throw new Error("unknown settlement");
     if (row.status === "recorded" || row.status === "verified") return row;
     if (row.status === "defaulted") throw new Error("this debt was already covered from collateral");
-    if (!isHex(report.paymentId) || !isHex(report.txHash)) throw new Error("paymentId and txHash must be hex");
-    const clash = this.db.get<{ id: string }>(
-      "SELECT id FROM settlements WHERE (hsp_payment_id = ? OR settlement_tx = ?) AND id != ?",
-      report.paymentId,
-      report.txHash,
-      id,
-    );
-    if (clash) throw new Error(`payment already used for settlement ${clash.id}`);
+    if (!row.hsp_cart_id) throw new Error("the HSP order for this debt is not open yet");
+    if (report.cartMandateId !== row.hsp_cart_id) throw new Error(`payment is for HSP order ${report.cartMandateId}, this debt's order is ${row.hsp_cart_id}`);
+    const tx = report.txHash && /^0x[0-9a-fA-F]{64}$/.test(report.txHash) ? report.txHash : null;
+    if (tx) {
+      const clash = this.db.get<{ id: string }>("SELECT id FROM settlements WHERE settlement_tx = ? AND id != ?", tx, id);
+      if (clash) throw new Error(`transaction already used for settlement ${clash.id}`);
+    }
     this.db.run(
-      "UPDATE settlements SET status = 'submitted', hsp_payment_id = ?, settlement_tx = ?, mandate_json = ?, error = NULL, updated_at = ? WHERE id = ?",
-      report.paymentId,
-      report.txHash,
-      JSON.stringify({ mandate: report.mandate ?? null, mandateSignature: report.mandateSignature ?? null }),
+      "UPDATE settlements SET status = 'submitted', settlement_tx = COALESCE(?, settlement_tx), mandate_json = ?, error = NULL, updated_at = ? WHERE id = ?",
+      tx,
+      JSON.stringify(report),
       Date.now(),
       id,
     );
@@ -121,8 +179,16 @@ export class Settlements {
     return this.get(id)!;
   }
 
-  byPaymentId(paymentId: string): SettlementRow | undefined {
-    return this.db.get<SettlementRow>("SELECT * FROM settlements WHERE lower(hsp_payment_id) = lower(?)", paymentId);
+  /** An HSP webhook named this order: check it now, even if the debtor has not reported yet. */
+  async onHspEvent(cartMandateId: string): Promise<void> {
+    const row = this.byCartMandateId(cartMandateId);
+    if (!row) return;
+    if (row.status === "awaiting_payment") this.db.run("UPDATE settlements SET status = 'submitted', updated_at = ? WHERE id = ?", Date.now(), row.id);
+    await this.process(row.id);
+  }
+
+  byCartMandateId(cartMandateId: string): SettlementRow | undefined {
+    return this.db.get<SettlementRow>("SELECT * FROM settlements WHERE hsp_cart_id = ?", cartMandateId);
   }
 
   /** Idempotent: moves a settlement as far forward as it can go right now. */
@@ -143,32 +209,13 @@ export class Settlements {
   }
 
   private async verify(row: SettlementRow): Promise<void> {
-    const agent = this.registry.get(row.agent_id);
-    if (!agent) return;
-    const stored = row.mandate_json ? (JSON.parse(row.mandate_json) as { mandate: PaymentReport["mandate"]; mandateSignature: Hex | null }) : null;
-    const order = this.order(row);
-    const result = await this.hsp.verify(
-      {
-        id: row.id,
-        epoch: BigInt(row.epoch),
-        agentId: BigInt(row.agent_id),
-        amount: BigInt(row.amount),
-        payer: agent.signer,
-        payTo: order.payTo,
-        token: order.token,
-        orderRef: order.orderRef,
-      },
-      {
-        paymentId: row.hsp_payment_id as Hex,
-        txHash: row.settlement_tx as Hex,
-        mandate: stored?.mandate ?? undefined,
-        mandateSignature: stored?.mandateSignature ?? undefined,
-      },
-    );
+    if (!this.registry.get(row.agent_id) || !row.hsp_cart_id) return;
+    const report = row.mandate_json ? (JSON.parse(row.mandate_json) as PaymentReport) : null;
+    const result = await this.hsp.verify(this.hspOrder(row), row.hsp_cart_id, report);
     const now = Date.now();
     if (result.outcome === "ACCEPT") {
       this.db.run(
-        "UPDATE settlements SET status = 'verified', hsp_status = ?, hsp_outcome = 'ACCEPT', receipt_json = ?, receipt_hash = ?, settlement_tx = COALESCE(?, settlement_tx), error = NULL, updated_at = ? WHERE id = ?",
+        "UPDATE settlements SET status = 'verified', hsp_status = ?, hsp_outcome = 'ACCEPT', receipt_json = ?, receipt_hash = ?, settlement_tx = ?, error = NULL, updated_at = ? WHERE id = ?",
         result.status,
         JSON.stringify(result.receipt),
         result.receiptHash,
@@ -176,32 +223,47 @@ export class Settlements {
         now,
         row.id,
       );
-      log("info", "hsp", `${row.id}: HSP ${result.status} / ACCEPT for agent #${row.agent_id} (${row.amount})`);
+      log("info", "hsp", `${row.id}: HSP ${result.status}, transfer verified on chain for agent #${row.agent_id} (${row.amount})`);
     } else if (result.outcome === "RETRYABLE") {
       this.db.run(
-        "UPDATE settlements SET hsp_status = ?, hsp_outcome = 'RETRYABLE', attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ?",
+        "UPDATE settlements SET hsp_status = ?, hsp_outcome = 'RETRYABLE', settlement_tx = COALESCE(?, settlement_tx), attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ?",
         result.status,
+        result.txHash,
         result.reason ?? null,
         now,
         row.id,
       );
-    } else {
-      // policy/permanent: this payment does not settle this debt. The debtor can pay again.
+    } else if (result.status === "payment-failed" && (this.failures.get(row.hsp_cart_id) ?? 0) < 2) {
+      // HSP could not complete the payment (e.g. it expired): the debtor retries the same order
+      this.failures.set(row.hsp_cart_id, (this.failures.get(row.hsp_cart_id) ?? 0) + 1);
       this.db.run(
-        "UPDATE settlements SET status = 'awaiting_payment', hsp_status = ?, hsp_outcome = ?, hsp_payment_id = NULL, settlement_tx = NULL, attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ?",
+        "UPDATE settlements SET status = 'awaiting_payment', hsp_status = ?, hsp_outcome = ?, settlement_tx = NULL, mandate_json = NULL, attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ?",
         result.status,
         result.outcome,
-        `rejected payment ${row.hsp_payment_id}: ${result.reason ?? result.outcome}`,
+        `HSP payment failed on ${row.hsp_cart_id}: ${result.reason ?? ""}; retrying`,
+        now,
+        row.id,
+      );
+      log("warn", "hsp", `${row.id}: HSP payment failed (${result.reason}); the debtor will retry`);
+    } else {
+      // this payment does not settle this debt. Open a fresh HSP order; the debtor pays again.
+      this.db.run(
+        `UPDATE settlements SET status = 'awaiting_payment', hsp_status = ?, hsp_outcome = ?, hsp_cart_id = NULL, hsp_payment_id = NULL, hsp_flow_id = NULL,
+           hsp_payment_url = NULL, settlement_tx = NULL, mandate_json = NULL, hsp_attempt = hsp_attempt + 1, attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ?`,
+        result.status,
+        result.outcome,
+        `rejected payment on ${row.hsp_cart_id}: ${result.reason ?? result.outcome}`,
         now,
         row.id,
       );
       log("warn", "hsp", `${row.id}: payment rejected (${result.outcome}): ${result.reason}`);
+      void this.openOrders();
     }
     this.emit(row.id);
   }
 
   private async record(row: SettlementRow): Promise<void> {
-    const paymentRef = toBytes32(row.hsp_payment_id!);
+    const paymentRef = toBytes32(row.hsp_cart_id!);
     try {
       const receipt = await this.chain.write(`recordSettlement e${row.epoch} #${row.agent_id}`, {
         address: this.chain.d.clearingHouse,
@@ -233,8 +295,17 @@ export class Settlements {
 
   /** Called on a timer: retries, deadlines, defaults and payouts. */
   async tick(): Promise<void> {
+    await this.openOrders();
     for (const r of this.db.all<{ id: string }>("SELECT id FROM settlements WHERE status IN ('submitted','verified')")) {
       await this.process(r.id);
+    }
+    // a debtor that paid but never reported (crashed, lost response) is still found
+    const now = Date.now();
+    for (const r of this.db.all<SettlementRow>("SELECT * FROM settlements WHERE status = 'awaiting_payment' AND hsp_cart_id IS NOT NULL")) {
+      if (now - (this.polledAt.get(r.id) ?? r.updated_at) < 15_000) continue;
+      this.polledAt.set(r.id, now);
+      const v = await this.hsp.verify(this.hspOrder(r), r.hsp_cart_id!, null);
+      if (v.outcome === "ACCEPT" || (v.outcome === "RETRYABLE" && v.status !== "payment-required" && v.status !== "unknown")) await this.onHspEvent(r.hsp_cart_id!);
     }
     for (const e of this.db.all<EpochRow>("SELECT * FROM epochs WHERE phase IN ('settling','paying') ORDER BY id")) {
       await this.drive(e);

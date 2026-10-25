@@ -18,7 +18,7 @@ export interface KohakuConfig {
   };
   domain: { name: string; version: string; chainId: number; verifyingContract: Address };
   epochs: { intakeSeconds: number; challengeSeconds: number; disputeWindowSeconds: number; settlementWindowSeconds: number };
-  hsp: { mode: string; note: string; coordinatorUrl: string | null; adapterAddress: string | null };
+  hsp: { mode: string; note: string; gatewayUrl: string; merchantName: string; network: string };
   clearer: Address;
 }
 

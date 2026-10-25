@@ -214,6 +214,11 @@ CREATE TABLE IF NOT EXISTS settlements (
   amount INTEGER NOT NULL,
   status TEXT NOT NULL,
   hsp_mode TEXT NOT NULL,
+  hsp_cart_id TEXT,
+  hsp_flow_id TEXT,
+  hsp_payment_url TEXT,
+  hsp_order_json TEXT,
+  hsp_attempt INTEGER NOT NULL DEFAULT 0,
   hsp_payment_id TEXT,
   hsp_status TEXT,
   hsp_outcome TEXT,
@@ -259,7 +264,15 @@ export class Db {
     this.raw = new DatabaseSync(join(dataDir, file));
     this.raw.exec(SCHEMA);
     // additive migrations for databases created by earlier versions
-    for (const sql of ["ALTER TABLE jobs ADD COLUMN delivery_json TEXT"]) {
+    for (const sql of [
+      "ALTER TABLE jobs ADD COLUMN delivery_json TEXT",
+      "ALTER TABLE settlements ADD COLUMN hsp_cart_id TEXT",
+      "ALTER TABLE settlements ADD COLUMN hsp_flow_id TEXT",
+      "ALTER TABLE settlements ADD COLUMN hsp_payment_url TEXT",
+      "ALTER TABLE settlements ADD COLUMN hsp_order_json TEXT",
+      "ALTER TABLE settlements ADD COLUMN hsp_attempt INTEGER NOT NULL DEFAULT 0",
+      "CREATE UNIQUE INDEX IF NOT EXISTS settlements_cart ON settlements(hsp_cart_id) WHERE hsp_cart_id IS NOT NULL",
+    ]) {
       try {
         this.raw.exec(sql);
       } catch {

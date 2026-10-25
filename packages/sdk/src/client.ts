@@ -26,7 +26,7 @@ export interface ClearingConfig {
   };
   domain: { name: string; version: string; chainId: number; verifyingContract: Address };
   epochs: { intakeSeconds: number; challengeSeconds: number; disputeWindowSeconds: number; arbitrationTimeoutSeconds: number; settlementWindowSeconds: number };
-  hsp: { mode: "local" | "coordinator"; coordinatorUrl: string | null; adapterAddress: string | null; chain: string; note: string };
+  hsp: { mode: "local" | "merchant"; gatewayUrl: string; merchantName: string; network: string; note: string };
   clearer: Address;
 }
 

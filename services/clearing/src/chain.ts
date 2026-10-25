@@ -107,6 +107,17 @@ export class Chain {
     return next;
   }
 
+  /** Plain value transfer through the same queue (used to fund the local gateway's relayer). */
+  sendValue(to: Address, value: bigint): Promise<TransactionReceipt> {
+    const run = async () => {
+      const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.viemChain, to, value });
+      return this.publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    };
+    const next = this.queue.then(run, run);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
+
   // ---------------------------------------------------------------- reads
 
   async ping(): Promise<boolean> {

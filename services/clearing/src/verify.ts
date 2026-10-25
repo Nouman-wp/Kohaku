@@ -1,5 +1,5 @@
 import { isAddressEqual, recoverTypedDataAddress, type Hex, type TypedDataDomain } from "viem";
-import { IOU_TYPES, iouDigest, net, type IOU } from "@kohaku/core";
+import { IOU_TYPES, iouDigest, net, settlementOrderRef, type IOU } from "@kohaku/core";
 import type { Db } from "./db.ts";
 import type { Chain } from "./chain.ts";
 import type { Registry } from "./registry.ts";
@@ -73,13 +73,14 @@ export async function verifyEpoch(db: Db, chain: Chain, registry: Registry, doma
       badTransfers++;
       continue;
     }
-    const t = await checkTransfer(chain.publicClient, s.settlement_tx as Hex, chain.d.token, agent.signer, chain.d.clearingHouse, BigInt(s.amount));
+    const ref = settlementOrderRef(chain.viemChain.id, chain.d.clearingHouse, BigInt(s.epoch), BigInt(s.agent_id), BigInt(s.amount));
+    const t = await checkTransfer(chain.publicClient, s.settlement_tx as Hex, chain.d.token, agent.signer, chain.d.clearingHouse, BigInt(s.amount), ref);
     if (!t.ok) badTransfers++;
   }
   checks.push({
     name: "HSP settlement transfers",
     ok: badTransfers === 0,
-    detail: `${settlements.length - badTransfers}/${settlements.length} recorded HSP payments are exact on-chain transfers to the pool`,
+    detail: `${settlements.length - badTransfers}/${settlements.length} recorded HSP payments are exact on-chain transfers to the pool, each consuming its debt's authorization`,
   });
 
   const statusNames = ["open", "posting", "finalized", "settled"];

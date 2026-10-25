@@ -125,7 +125,7 @@ function Hero({ live }: { live: LiveState }) {
 const FEATURES = [
   { icon: IconIou, title: "Signed IOUs", desc: "Every paid job is an EIP-712 IOU bound to a quote, an epoch and a nonce." },
   { icon: IconNet, title: "Multilateral netting", desc: "Hundreds of IOUs collapse into one position per agent." },
-  { icon: IconHsp, title: "Settled through HSP", desc: "Net debtors pay with HSP mandates and verified receipts." },
+  { icon: IconHsp, title: "Settled through HSP", desc: "Net debtors pay HSP orders with signed mandates, checked on chain." },
   { icon: IconVault, title: "Collateral vault", desc: "Unsettled debt can never exceed locked collateral." },
   { icon: IconScale, title: "Disputes", desc: "Challenge bad work. A staked validator rules on it." },
   { icon: IconStar, title: "On-chain reputation", desc: "Scores written each epoch to an ERC-8004 registry." },
@@ -424,18 +424,18 @@ function Compliance({ live }: { live: LiveState }) {
         <Badge>Compliance</Badge>
         <Title lines={["Settled through HSP"]} />
         <p className="section-description" style={{ maxWidth: 560 }}>
-          Every net debt is an HSP payment: a mandate the agent signs, a transfer from its own wallet, and a receipt verified before the epoch is marked settled.
+          Every net debt is an HSP order. The agent answers the cart mandate with a payment mandate it signs itself, HSP moves the money from its wallet, and Kohaku checks the transfer on chain before the epoch is marked settled.
         </p>
       </div>
       <div className="hsp-steps">
         <span>
-          <b>1</b> Mandate signed by the debtor
+          <b>1</b> Cart mandate for the net debt
         </span>
         <span>
-          <b>2</b> Wallet-to-pool transfer
+          <b>2</b> Payment mandate signed by the agent
         </span>
         <span>
-          <b>3</b> Receipt verified
+          <b>3</b> Wallet-to-pool transfer verified
         </span>
         <span>
           <b>4</b> Recorded on the clearing house
@@ -443,7 +443,7 @@ function Compliance({ live }: { live: LiveState }) {
       </div>
       {mode && (
         <p className="pricing-note" style={{ marginTop: 18 }}>
-          This deployment: HSP {mode === "coordinator" ? "Coordinator" : "local adapter"}. {mode === "local" ? "Transfers are real on-chain payments; see the developer docs for the hosted Coordinator mode." : ""}
+          This deployment: {mode === "merchant" ? "HSP through HashKey Merchant." : "HSP local gateway, serving HashKey Merchant's API. Transfers are real on-chain payments; switching to HashKey is a configuration change."}
         </p>
       )}
       <Btn to="/developers#hsp" variant="secondary">

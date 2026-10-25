@@ -41,7 +41,7 @@ import {
 } from "@kohaku/core";
 import { identityRegistryAbi, validationRegistryAbi } from "@kohaku/core/abis";
 import { ClearingClient, type ClearingConfig } from "./client.ts";
-import { LocalHspPayer, type HspPayer } from "./hsp.ts";
+import { HspRequestError, MerchantHspPayer, type HspPayer } from "./hsp.ts";
 
 export interface JobContext {
   jobId: string;
@@ -136,7 +136,8 @@ export class KohakuAgent {
     this.chain = { ...base, rpcUrls: { default: { http: [opts.rpcUrl] } } };
     this.publicClient = createPublicClient({ chain: this.chain, transport: http(opts.rpcUrl), pollingInterval: this.chain.id === 31337 ? 250 : 1_000 }) as PublicClient;
     this.wallet = createWalletClient({ chain: this.chain, transport: http(opts.rpcUrl), account: this.account, pollingInterval: this.chain.id === 31337 ? 250 : 1_000 });
-    this.hsp = new LocalHspPayer(this.wallet, this.publicClient, this.account, this.chain);
+    // the local HSP gateway lives with the clearing service; HashKey Merchant at its own URL
+    this.hsp = new MerchantHspPayer(this.wallet, this.publicClient, this.account, (o) => (o.hspMode === "local" ? `${this.client.baseUrl}/hsp` : o.hsp!.gatewayUrl));
   }
 
   /** Connect to a clearing service. The agent id is looked up from the identity registry. */
@@ -485,9 +486,16 @@ export class KohakuAgent {
       for (const o of orders) {
         try {
           // never pay the same order twice: re-report a payment we already made
+          if (!o.order.hsp?.flowId) continue; // HSP order not open yet; next round
           let report = this.paid.get(o.id);
-          if (!report || o.error?.includes("rejected payment")) {
-            report = await this.hsp.pay(o.order);
+          if (!report || report.cartMandateId !== o.order.hsp.cartMandateId) {
+            try {
+              report = await this.hsp.pay(o.order);
+            } catch (err) {
+              // paid already (e.g. before a restart): report it and let the clearing service check
+              if (!(err instanceof HspRequestError && /already payment-/.test(err.message))) throw err;
+              report = { cartMandateId: o.order.hsp.cartMandateId, flowId: o.order.hsp.flowId };
+            }
             this.paid.set(o.id, report);
           }
           await this.client.reportPayment(o.id, report);

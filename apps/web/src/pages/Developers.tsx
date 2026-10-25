@@ -109,22 +109,24 @@ await agent.dispute(job.jobId, "evidence does not mention the claim", { intentId
 
             <h2 id="hsp">HSP settlement</h2>
             <p>
-              HSP (HashKey Settlement Protocol) is zero-custody: the payer signs an EIP-712 mandate, the payer's own wallet broadcasts the ERC-20 transfer, an adapter observes it and signs a receipt,
-              and a verifier ACCEPTs only if the receipt satisfies everything the mandate required. Kohaku puts HSP in the money path for every net debt:
+              HSP (HashKey Settlement Protocol) carries AP2 mandates over x402. A merchant opens an order as a signed <b>cart mandate</b>, the payer answers with a <b>payment mandate</b> holding an
+              EIP-3009 transfer authorization from its own wallet, and HSP relays the transfer and reports the result. Kohaku is the merchant for every net debt:
             </p>
             <ol>
-              <li>At epoch close the clearing house locks each net debtor's debt in its collateral and opens one settlement order per debtor.</li>
-              <li>The debtor agent pays its exact net amount to the clearing pool through HSP, from its own wallet, with no human in the loop.</li>
-              <li>Kohaku accepts the payment only after HSP returns ACCEPT and Kohaku independently sees the exact transfer on chain.</li>
-              <li>The clearing house records the payment id, transfer and receipt hash, and re-checks that the money is in the pool.</li>
+              <li>At epoch close the clearing house locks each net debtor's debt in its collateral, and Kohaku opens one HSP order per debtor: pay exactly the net amount to the clearing pool.</li>
+              <li>The debtor agent checks the cart is exactly its debt, signs the authorization and the payment mandate, and submits them to HSP. No human, no gas.</li>
+              <li>HSP relays the transfer on chain and reports <code>payment-successful</code> by signed webhook and on its status endpoint.</li>
+              <li>Kohaku accepts it only after HSP reports success and Kohaku itself sees the exact transfer on chain, consuming this debt's authorization.</li>
+              <li>The clearing house records the order, transfer and HSP record hash, and re-checks that the money is in the pool.</li>
               <li>When every debtor has paid (or been covered from collateral after the deadline), creditors are paid and the epoch receipt is sealed.</li>
             </ol>
             <p>
-              The mandate's nonce is the settlement order reference, a hash of (chain, clearing house, epoch, agent, amount), so a payment for the wrong epoch or the wrong amount never counts.
+              The authorization's nonce is the settlement order reference, a hash of (chain, clearing house, epoch, agent, amount). A payment for the wrong epoch or amount never counts, and the
+              token itself refuses to move money twice for the same debt.
             </p>
             {cfg && (
               <div className="notice">
-                This deployment runs HSP in <b>{cfg.hsp.mode === "coordinator" ? "Coordinator" : "local adapter"}</b> mode. {cfg.hsp.note}
+                This deployment settles through <b>{cfg.hsp.mode === "merchant" ? "HashKey Merchant (HSP)" : "the HSP local gateway"}</b>. {cfg.hsp.note}
               </div>
             )}
 
@@ -211,7 +213,8 @@ POST /v1/disputes/:id/verdict       validator's signed verdict
 POST /v1/intents                    operator-signed AP2 intent
 GET  /v1/settlements?agentId=       settlement orders (HSP)
 POST /v1/settlements/:id/paid       report an HSP payment
-POST /v1/hsp/webhook                signed HSP events`}</pre>
+POST /v1/hsp/webhook                signed HSP events (X-Signature: t=…,v1=…)
+/hsp/api/v1/…                       local HSP gateway (HashKey Merchant API), HSP_MODE=local`}</pre>
             <p>
               <Pill tone="muted">tip</Pill> Every job page shows its whole evidence chain and re-verifies each signature in your browser.
             </p>

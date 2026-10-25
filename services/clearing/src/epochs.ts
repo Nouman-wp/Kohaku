@@ -20,6 +20,8 @@ export interface EpochTimings {
   /** write scores on chain every N epochs (scores are cumulative, so nothing is lost) */
   reputationStride: number;
   publicUrl: string;
+  /** keep an epoch with no IOUs open instead of finalising it empty (saves gas on public chains) */
+  extendIdle?: boolean;
 }
 
 /**
@@ -37,6 +39,9 @@ export interface EpochTimings {
  *
  * Several epochs are in flight at once (one in intake while the previous one settles),
  * but on-chain finalisation is strictly sequential, as the contract requires.
+ *
+ * With `extendIdle`, an epoch whose intake ends without a single IOU stays in intake for
+ * another window instead of being finalised empty, so a quiet clearing house costs no gas.
  */
 export class EpochEngine {
   private intakeId = 0;
@@ -114,6 +119,12 @@ export class EpochEngine {
     this.publish(id);
   }
 
+  /** Nothing to clear: no IOU in this epoch and none carried over from an earlier one. */
+  private idle(id: number): boolean {
+    const n = this.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM ious WHERE epoch = ? OR status = 'carried'", id)!.n;
+    return n === 0;
+  }
+
   private setPhase(id: number, phase: string, extra: Record<string, string | number | null> = {}): void {
     const sets = ["phase = ?", ...Object.keys(extra).map((k) => `${k} = ?`)];
     this.db.run(`UPDATE epochs SET ${sets.join(", ")} WHERE id = ?`, phase, ...Object.values(extra), id);
@@ -129,8 +140,14 @@ export class EpochEngine {
     const now = Date.now();
     const cur = this.row(this.intakeId);
     if (cur && now >= cur.intake_ends_at) {
-      this.setPhase(cur.id, "challenge");
-      this.create(cur.id + 1, now);
+      if (this.t.extendIdle && this.idle(cur.id)) {
+        const ends = now + this.t.intakeSeconds * 1000;
+        this.db.run("UPDATE epochs SET intake_ends_at = ?, challenge_ends_at = ? WHERE id = ?", ends, ends + this.t.challengeSeconds * 1000, cur.id);
+        this.publish(cur.id);
+      } else {
+        this.setPhase(cur.id, "challenge");
+        this.create(cur.id + 1, now);
+      }
     }
     for (const e of this.db.all<EpochRow>("SELECT * FROM epochs WHERE phase = 'challenge' AND challenge_ends_at <= ?", now)) {
       this.setPhase(e.id, "closing");

@@ -7,7 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, "../../..");
 
 function loadDotEnv(): void {
-  const file = resolve(REPO_ROOT, ".env");
+  const file = resolve(REPO_ROOT, process.env.KOHAKU_ENV_FILE ?? ".env");
   if (!existsSync(file)) return;
   for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
@@ -40,8 +40,6 @@ export interface FleetConfig {
   gasTarget: bigint;
   rogueBadRate: number;
   guestSessionsPerHour: number;
-  hspMode: "local" | "coordinator";
-  hsp: { sdkPath?: string; coordinatorUrl?: string; apiKey?: string; chainName?: string };
 }
 
 export function loadFleetConfig(): FleetConfig {
@@ -70,11 +68,9 @@ export function loadFleetConfig(): FleetConfig {
     collateralTarget: units(e.COLLATERAL_TARGET, local ? "25" : "3"),
     orchestratorCollateral: units(e.ORCHESTRATOR_COLLATERAL, local ? "100" : "10"),
     walletTarget: units(e.WALLET_TARGET, local ? "20" : "2"),
-    gasTarget: BigInt(Math.round(Number(e.GAS_TARGET ?? (local ? "0.5" : "0.02")) * 1e18)),
+    gasTarget: BigInt(Math.round(Number(e.GAS_TARGET ?? (local ? "0.5" : "0.004")) * 1e18)),
     rogueBadRate: Number(e.ROGUE_BAD_RATE ?? 0.5),
     guestSessionsPerHour: Number(e.GUEST_SESSIONS_PER_HOUR ?? 20),
-    hspMode: (e.HSP_MODE ?? "local") === "coordinator" ? "coordinator" : "local",
-    hsp: { sdkPath: e.HSP_SDK_PATH, coordinatorUrl: e.HSP_COORDINATOR_URL, apiKey: e.HSP_API_KEY, chainName: e.HSP_CHAIN_NAME },
   };
 }
 

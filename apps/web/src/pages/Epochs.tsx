@@ -240,7 +240,7 @@ export function EpochPage() {
                     <th>Debtor</th>
                     <th className="num">Amount</th>
                     <th>Mode</th>
-                    <th>HSP payment</th>
+                    <th>HSP order</th>
                     <th>HSP outcome</th>
                     <th>Wallet → pool transfer</th>
                     <th>Receipt</th>
@@ -253,10 +253,10 @@ export function EpochPage() {
                       <td>{agentName(agents, s.agentId)}</td>
                       <td className="num">{usd(s.amount, 4)}</td>
                       <td>
-                        <Pill tone="muted">{s.hspMode === "local" ? "local adapter" : "coordinator"}</Pill>
+                        <Pill tone="muted">{s.hspMode === "local" ? "local gateway" : "HashKey Merchant"}</Pill>
                       </td>
                       <td>
-                        <HashLink hash={s.hspPaymentId} n={5} />
+                        <HashLink hash={s.hspCartMandateId} href={s.hspPaymentUrl} n={8} />
                       </td>
                       <td>{s.hspStatus ? `${s.hspStatus} / ${s.hspOutcome}` : <span className="muted">{s.status}</span>}</td>
                       <td>
