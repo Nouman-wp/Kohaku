@@ -1,0 +1,16 @@
+{
+  "chainId": 133,
+  "clearer": "0x03A12881b6c6Bd63D87Ca7149DC143D35570aC70",
+  "clearingHouse": "0xa4f5f3F30E43182285A1EFAbbA8513103efA6730",
+  "collateralVault": "0x230A6944B830d6E1ffB2D91A5C5446c135f65Aa3",
+  "deployedAtBlock": 34865787,
+  "deployer": "0x3b5222307762B44533323fAc37e5B4FBbfDac0C4",
+  "identityRegistry": "0x84760FD22d897EF2c33a1ec059cA81bfFd82b413",
+  "mockToken": true,
+  "owner": "0x3b5222307762B44533323fAc37e5B4FBbfDac0C4",
+  "reputationRegistry": "0x5A2b8ACDd28cB7cC443Edfc31fd513dc873CD8fB",
+  "settlementWindow": 180,
+  "token": "0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3",
+  "validationRegistry": "0x2B8d74680719EBcA4F97e3a6B244F4297836055E",
+  "withdrawalDelay": 900
+}
