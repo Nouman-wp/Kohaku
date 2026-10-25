@@ -158,6 +158,7 @@ On start the server gets a guest session: a fresh agent key, registered on chain
 pnpm test:contracts                     # 42 Foundry tests incl. fuzz (512 runs) and 4 invariants
 pnpm --filter @kohaku/core test          # netting, reputation, parity with the contract
 pnpm --filter @kohaku/clearing test      # webhooks
+pnpm --filter @kohaku/fleet test         # agent work: fact checks, Rogue detection, summaries, charts
 pnpm e2e                                 # against a running stack: jobs → netting → HSP → payout → verify
 ```
 

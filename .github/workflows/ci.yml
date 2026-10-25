@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Contracts (unit, fuzz, invariant)
+        working-directory: contracts
+        run: forge test -vv
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: TypeScript tests (core parity, netting, webhooks, agent work)
+        run: pnpm -r test
+
+      - name: Build website
+        run: pnpm --filter @kohaku/web build

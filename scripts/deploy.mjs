@@ -3,6 +3,7 @@
 //   node scripts/deploy.mjs local            anvil, mock token
 //   node scripts/deploy.mjs hashkey-testnet  HashKey Chain testnet (133), verified on Blockscout
 //   node scripts/deploy.mjs hashkey          HashKey Chain mainnet (177), verified on Blockscout
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ANVIL_KEYS, ROOT, bin, loadEnv, runToEnd } from "./lib.mjs";
@@ -23,7 +24,12 @@ export async function deploy(network) {
     console.warn("SETTLEMENT_TOKEN is empty: a MockUSDC would be deployed on mainnet. Set it to the stablecoin to settle in.");
     throw new Error("refusing to deploy a mock token to mainnet");
   }
-  const clearer = env.CLEARER_ADDRESS || "";
+  // the contracts must trust the key the clearing service will actually run with
+  let clearer = env.CLEARER_ADDRESS || "";
+  if (!clearer && env.CLEARER_PRIVATE_KEY) {
+    clearer = execFileSync(bin("cast"), ["wallet", "address", "--private-key", env.CLEARER_PRIVATE_KEY], { encoding: "utf8" }).trim();
+    console.log(`clearer (from CLEARER_PRIVATE_KEY): ${clearer}`);
+  }
   const args = ["script", "script/Deploy.s.sol:Deploy", "--rpc-url", env.RPC_URL && network !== "local" ? env.RPC_URL : net.rpc, "--broadcast", "--slow"];
   if (net.verifier) args.push("--verify", "--verifier", "blockscout", "--verifier-url", net.verifier);
   await runToEnd("deploy", bin("forge"), args, {

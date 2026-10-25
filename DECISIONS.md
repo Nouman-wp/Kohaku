@@ -87,9 +87,10 @@ why. Newest decisions are at the bottom of each section.
   registry, accumulates each agent's credit and debit itself, and only finalises if the IOU-set
   commitment and positions commitment the service *claims* equal what the chain *computed*.
   The IOU-set commitment is a running hash of IOU digests in posting order, not a Merkle root.
-- **Cost:** about 63k gas per IOU (measured on anvil: 1.0M gas for 16 IOUs, including first-touch
-  storage). That is negligible on HashKey Chain testnet (1 gwei) and expensive on mainnet (base fee
-  measured at 500 gwei). See decision 19.
+- **Cost:** measured on anvil, about 25k gas per IOU in a busy epoch (2.7M gas for 110 IOUs in one
+  chunk) and up to 63k per IOU in tiny epochs, where first-touch storage dominates. That is
+  negligible on HashKey Chain testnet (1 gwei) and expensive on mainnet (base fee measured at
+  500 gwei). See decision 19.
 
 ### 7. Double counting is prevented by ordering, not per-IOU storage
 
@@ -208,7 +209,7 @@ why. Newest decisions are at the bottom of each section.
 - **Brief:** contracts on HashKey Chain mainnet; HSP on whichever network it supports, said plainly.
 - **Kohaku:** the same verified contract suite deploys to mainnet (`pnpm deploy:mainnet`) and
   testnet (`pnpm deploy:testnet`). The always-on fleet is meant to run on **testnet**, next to the
-  HSP sandbox, because posting every IOU on chain at 500 gwei costs about 0.03 HSK per IOU. The
+  HSP sandbox, because posting every IOU on chain at 500 gwei costs roughly 0.0125 HSK per IOU in a busy epoch. The
   mainnet deployment carries real, lower-frequency epochs. The README states which network each
   link points at.
 
