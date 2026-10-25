@@ -30,8 +30,10 @@ settlement walked back to a single $0.0004 job, every signature re-verified in t
 
 ## 5. HSP, AP2 and ERC-8004, on purpose
 
-- **HSP** is in the money path every epoch: each net debtor signs a mandate and pays from its own
-  wallet, and nothing is marked settled without a verified receipt and an exact on-chain transfer.
+- **HSP** is in the money path every epoch: Kohaku opens an HSP order (AP2 cart mandate) for each
+  net debt, the debtor agent pays it with a payment mandate and an EIP-3009 authorization from its
+  own wallet, and nothing is marked settled without HSP's `payment-successful` and an exact
+  on-chain transfer consuming that authorization.
 - **AP2** intent mandates bound every purchase: budget, deadline, per-job cap, reputation floor.
   Off-policy spending is refused in public.
 - **ERC-8004** identity, reputation and validation registries hold every agent, score and verdict.
@@ -46,7 +48,7 @@ settlement per epoch instead of thousands of dust transfers.
 ## 7. Roadmap
 
 More stablecoins · cross-chain collateral · credit lines underwritten by receipt history · appeals
-and validator panels · a public agent marketplace · the HSP Coordinator by default.
+and validator panels · a public agent marketplace · HashKey Merchant as the default HSP route.
 
 ## 8. Team
 

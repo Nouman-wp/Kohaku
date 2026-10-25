@@ -29,7 +29,7 @@ Banks solved this decades ago. Members record obligations all day, a clearing ho
 2. **Trade.** Every paid job produces an **EIP-712 IOU** signed by the buyer, bound to the seller's signed quote, the epoch and a nonce. The work happens off chain at full speed. Every purchase must fit an **AP2-style intent** the human signed: budget, deadline, per-job cap, reputation floor.
 3. **Challenge.** For a short window the buyer can dispute a delivery. A staked validator re-checks the work; an upheld dispute voids the IOU.
 4. **Net.** When the epoch closes, the clearing house contract **recomputes every agent's net position from the signed IOUs itself**. It rejects any result that disagrees, and it locks each debtor's debt in collateral.
-5. **Settle.** Each net debtor pays its exact debt **through HSP**, from its own wallet, with no human in the loop. Creditors are paid from the pool. A debtor that misses the deadline is covered from its collateral.
+5. **Settle.** Each net debtor pays its exact debt **through HSP**: the clearing service opens an HSP order, the agent pays it from its own wallet with a signed authorization, no human in the loop. Creditors are paid from the pool. A debtor that misses the deadline is covered from its collateral.
 6. **Remember.** Reputation updates on chain and the epoch is sealed with a receipt. Any settlement can be walked back to a single $0.0004 job.
 
 Kohaku is the **central counterparty**: agents never need to trust each other, only the rules, the collateral and the chain.
@@ -55,8 +55,9 @@ flowchart LR
   CH --- ID[(ERC-8004 Identity)]
   C -- "epoch scores" --> RP[(ERC-8004 Reputation)]
   A -- "verdicts" --> VR[(ERC-8004 Validation)]
-  Fleet -- "debtors pay net debt<br/>mandate → wallet transfer → receipt" --> HSP{{HSP}}
-  HSP -- "verified ACCEPT" --> C
+  C -- "HSP order per net debt<br/>(AP2 cart mandate)" --> HSP{{HSP}}
+  Fleet -- "payment mandate +<br/>EIP-3009 authorization" --> HSP
+  HSP -- "relayed transfer to the pool,<br/>payment-successful" --> C
   W[Website: live floor, epochs,<br/>evidence chains, verify] <-- WebSocket --> C
 ```
 
@@ -72,32 +73,44 @@ flowchart LR
 
 ## HSP integration, honestly
 
-HSP is zero-custody. The payer signs an EIP-712 **mandate**, the payer's own wallet broadcasts the transfer, an adapter observes it and signs a **receipt**, and a verifier ACCEPTs only if the receipt satisfies the mandate. In Kohaku, **every net debt in every epoch is an HSP payment** from the debtor agent to the clearing pool:
+Kohaku follows the HSP route that the projects settling through HSP on GitHub use: the **HashKey Merchant API** (AP2 mandates over x402). The clearing service is the merchant and **every net debt in every epoch is an HSP order** paid by the debtor agent:
 
-- The debtor agent settles on its own: it signs the mandate and sends the transfer, with no human approval and no wallet popup.
-- The payment is bound to one epoch, one debtor and one exact amount. The mandate nonce is a hash of (chain, clearing house, epoch, agent, amount), and the clearing service accepts only an exact on-chain `Transfer` from the debtor's registered wallet to the pool.
-- An epoch is marked settled only after HSP verification returns **ACCEPT**, Kohaku has seen the exact transfer on chain, and the clearing house contract has confirmed the pool actually received the money. If HSP is slow or down, settlements stay pending and are retried; state is never lost.
+1. At epoch close the clearing service opens one HSP order per debtor: an AP2 **cart mandate** paying the exact net amount to the clearing pool, signed with an ES256K merchant JWT (`cart_hash`) and sent with HMAC-signed requests.
+2. The debtor agent reads the cart back from HSP and refuses to pay unless it is exactly its debt. It signs an **EIP-3009 `TransferWithAuthorization`** whose nonce is the settlement order reference (a hash of chain, clearing house, epoch, agent and amount), wraps it in an x402 **payment mandate** with the `user_authorization` JWT, and submits it to HSP's `pay-mandate`. No human, no wallet popup, no gas.
+3. HSP relays the transfer and reports `payment-successful`, by signed webhook (`X-Signature: t=…,v1=…`) and on its status endpoint.
+4. Kohaku marks the debt settled only when HSP reports success **and** Kohaku sees on chain the exact transfer from the debtor's registered wallet to the pool, consuming that authorization, **and** the clearing house contract confirms the pool received the money. The token itself refuses to pay one debt twice. If HSP is slow or down, settlements stay pending and are retried; open orders are polled, so nothing is lost.
 
 There are two modes, and the app says which one is running:
 
 | Mode | What it does | When |
 |---|---|---|
-| `coordinator` | Debtors pay with the **official HSP SDK** (`HSPClient.pay`). Kohaku reads the payment from the **hosted HSP Coordinator** (`GET /payments/:id`), requires `SETTLED`, re-runs the official `HSPVerifier` against the pinned adapter, and checks the transfer on chain. | Set `HSP_COORDINATOR_URL`, `HSP_API_KEY`, `HSP_SDK_PATH`, `HSP_ADAPTER_ADDRESS` with the sandbox values the organisers hand out. |
-| `local` | Kohaku runs the same mandate → wallet transfer → signed receipt → verifier flow with HSP's object shapes. The transfers are **real on-chain payments**. The receipt is signed by a Kohaku adapter key, not by the hosted Coordinator. Labelled **"HSP local adapter"** everywhere. | Default, and the only option on a local devnet. |
+| `merchant` | Orders, payments and webhooks go through **HashKey Merchant** (`merchant-qa.hashkeymerchant.com` on testnet). HashKey relays the transfers. | Set `HSP_BASE_URL`, `HSP_APP_KEY`, `HSP_APP_SECRET` from HashKey onboarding, register the merchant public key, settle in a token HashKey supports. |
+| `local` | The clearing service also runs a gateway that serves the **same HashKey Merchant endpoints** (`/hsp/api/v1/…`): it verifies the merchant JWT, the payment mandate and the EIP-3009 signature against the cart, relays the authorization and sends signed webhooks. Transfers are **real on-chain payments**. Labelled **"HSP local gateway"** everywhere. | Default until HashKey credentials and HashKey test USDC are in hand. |
 
-Kohaku never presents the local adapter as the hosted Coordinator. See [DECISIONS.md](DECISIONS.md) §1–5 for why the integration follows the current official HSP guide rather than the older merchant-order API.
+The clearing service and the agents run the same code in both modes. Kohaku never presents the local gateway as HashKey. See [DECISIONS.md](DECISIONS.md) §1–5.
 
 ## Deployments
 
-Addresses live in [`contracts/deployments/`](contracts/deployments) (one JSON per chain id) and on the website's Developers page.
+Addresses live in [`contracts/deployments/`](contracts/deployments) (one JSON per chain id) and on the website's Developers page. Runbook: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+**Testnet (chain 133):** website <https://kohaku-xi.vercel.app> · HSP local gateway · settles in Kohaku Test USDC (EIP-3009).
+
+| Contract | Address |
+|---|---|
+| KohakuClearingHouse | `0xa4f5f3F30E43182285A1EFAbbA8513103efA6730` |
+| KohakuCollateralVault | `0x230A6944B830d6E1ffB2D91A5C5446c135f65Aa3` |
+| Identity registry (ERC-8004) | `0x84760FD22d897EF2c33a1ec059cA81bfFd82b413` |
+| Reputation registry (ERC-8004) | `0x5A2b8ACDd28cB7cC443Edfc31fd513dc873CD8fB` |
+| Validation registry (ERC-8004) | `0x2B8d74680719EBcA4F97e3a6B244F4297836055E` |
+| Kohaku Test USDC | `0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3` |
 
 | Network | Chain id | Status |
 |---|---|---|
-| HashKey Chain mainnet | 177 | `pnpm deploy:mainnet` (verified on Blockscout). About 4.9 HSK of gas at the current 500 gwei base fee. |
-| HashKey Chain testnet | 133 | `pnpm deploy:testnet` (verified on Blockscout). Home of the always-on fleet, next to the HSP sandbox. |
+| HashKey Chain testnet | 133 | Deployed (above). Eight fleet agents registered, collateralised and trading. |
+| HashKey Chain mainnet | 177 | Pending the testnet sign-off. Settles in USDC.e `0x054e…8D0a`; about 4.8 HSK to deploy at the current 500 gwei base fee. |
 | Local (anvil) | 31337 | `pnpm dev` deploys automatically. |
 
-Explorer: mainnet <https://hashkey.blockscout.com>, testnet <https://testnet-explorer.hsk.xyz>.
+Explorer: mainnet <https://hashkey.blockscout.com>, testnet <https://testnet-explorer.hsk.xyz> (offline at the time of writing).
 
 ## Run it locally (one command)
 
@@ -118,7 +131,7 @@ pnpm dev
 - **Default drill**: the orchestrator stops paying. After the deadline its collateral is seized and creditors are paid in full.
 - **Close epoch now**: skip the wait and watch the netting moment.
 
-Copy `.env.example` to `.env` to configure a public network, HSP Coordinator credentials or epoch timings.
+Copy `.env.example` to `.env` to change epoch timings or HSP settings. For a public network, `node scripts/wallets.mjs testnet` writes `.env.testnet` with every key the deployment needs (see [docs/DEPLOY.md](docs/DEPLOY.md)).
 
 ## Plug in Claude (MCP)
 
@@ -157,7 +170,7 @@ On start the server gets a guest session: a fresh agent key, registered on chain
 ```bash
 pnpm test:contracts                     # 42 Foundry tests incl. fuzz (512 runs) and 4 invariants
 pnpm --filter @kohaku/core test          # netting, reputation, parity with the contract
-pnpm --filter @kohaku/clearing test      # webhooks
+pnpm --filter @kohaku/clearing test      # HSP gateway, webhooks, reputation decay
 pnpm --filter @kohaku/fleet test         # agent work: fact checks, Rogue detection, summaries, charts
 pnpm e2e                                 # against a running stack: jobs → netting → HSP → payout → verify
 ```
@@ -166,8 +179,8 @@ pnpm e2e                                 # against a running stack: jobs → net
 
 | Real | Mocked or simplified (and labelled) |
 |---|---|
-| Every IOU, quote, delivery, dispute, verdict and intent is an EIP-712 signature checked by the clearing service and, for IOUs, by the contract | **HSP local adapter** mode (see above) until sandbox credentials are configured |
-| Netting, collateral locks, settlements, defaults, payouts and reputation are on-chain transactions | On a local devnet the stablecoin is `MockUSDC`; public networks use the real stablecoin set in `SETTLEMENT_TOKEN` |
+| Every IOU, quote, delivery, dispute, verdict and intent is an EIP-712 signature checked by the clearing service and, for IOUs, by the contract | **HSP local gateway** mode (see above) until HashKey Merchant credentials are configured |
+| Netting, collateral locks, settlements, defaults, payouts and reputation are on-chain transactions | Locally and on testnet the stablecoin is Kohaku Test USDC (HSP's testnet USDC is owner-mint only); mainnet uses USDC.e |
 | Agents do real work: Wikipedia search, MyMemory translation, extractive summaries, chart analysis, independent re-checks | Offline fallbacks (labelled `offline` / `offline-glossary`) when the venue network is down |
 | Every number on the website comes from the ledger and the chain | The clearing fee is 0% in this version |
 
@@ -193,7 +206,7 @@ packages/mcp      MCP server
 services/clearing clearing service
 services/fleet    live agent fleet + scenario runner
 apps/web          website
-scripts/          dev, deploy, e2e
+scripts/          dev, deploy, wallets, fund, serve, publish-web, e2e
 DECISIONS.md      every departure from the brief, and why
 ```
 
