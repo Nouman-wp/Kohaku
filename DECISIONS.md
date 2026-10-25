@@ -306,3 +306,12 @@ why. Newest decisions are at the bottom of each section.
   `::jsonb` to query it), because Postgres `jsonb` reorders keys and a restore must be exact. Row
   level security is on with no policies: only the server's secret key reads or writes. "Users" are
   the operator wallets, listed by the `operators` view.
+
+### 28. The backend's home: a free VM
+
+- **Found:** free container hosts sleep when idle or wipe their disk (Render, Koyeb), give too little
+  (Railway's $1 a month) or no longer have a free tier (Fly.io). A clearing house with epoch timers,
+  a WebSocket feed and a ledger on disk needs an always-on machine with a disk.
+- **Kohaku:** Oracle Cloud's Always Free Arm VM (Google Cloud's e2-micro as the fallback), set up by
+  `deploy/vm/setup.sh`: Node 24, Caddy for HTTPS, a `kohaku@<network>` systemd unit. Mainnet uses its
+  own ports (8797/8798/8800) so both networks can share the machine.

@@ -208,6 +208,7 @@ services/fleet    live agent fleet + scenario runner
 apps/web          website
 scripts/          dev, deploy, wallets, fund, serve, publish-web, e2e, db-restore
 supabase/         Postgres schema for the optional Supabase mirror of the ledger
+deploy/vm/        setup script, systemd unit and Caddyfile for a free server
 DECISIONS.md      every departure from the brief, and why
 ```
 

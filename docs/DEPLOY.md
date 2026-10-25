@@ -75,9 +75,8 @@ The website is a static build on Vercel; Vercel proxies `/v1`, `/hsp`, `/agents`
 `/control` to the backend, so every public URL (and every on-chain agent URI) lives under one stable
 domain while the backend can move.
 
-1. The backend must be reachable over HTTPS. Either run `serve.mjs` on a host with a public port
-   (a VPS, Railway, Render, Fly; point a domain at port 8790), or open a Cloudflare quick tunnel from
-   this machine:
+1. The backend must be reachable over HTTPS. Either run it on a server (section 4: a free Oracle
+   Cloud VM works for testnet and mainnet), or open a Cloudflare quick tunnel from this machine:
 
    ```bash
    node scripts/serve.mjs testnet --tunnel   # writes .data/tunnel-testnet.url
@@ -93,7 +92,39 @@ domain while the backend can move.
    Run it again whenever the backend URL changes (a quick tunnel gets a new URL on every start).
    Vercel does not proxy WebSockets, so the live feed connects to the backend URL directly.
 
-## 4. Supabase mirror
+## 4. A free server for the backend
+
+The backend has to stay on all the time: epochs close on a timer, the fleet runs background work,
+the live feed is a WebSocket and the ledger is a SQLite file on disk. Hosts that sleep when idle or
+wipe the disk on restart (Render's and Koyeb's free tiers, for example) stop epochs half way and lose
+the ledger. Pick a real VM:
+
+| Host | Free | Notes |
+|---|---|---|
+| Oracle Cloud Always Free | Arm VM up to 2 OCPU / 12 GB, 200 GB disk | Best fit; testnet and mainnet fit side by side. Card needed for verification. Choose a small shape (1 OCPU / 4 GB): Oracle may reclaim VMs that sit under 20% CPU, network and memory for a week. |
+| Google Cloud e2-micro | 1 GB RAM, 30 GB disk, US regions | Enough for testnet (the setup script adds swap). Card needed. |
+
+1. Create an Ubuntu 24.04 VM and open TCP 80 and 443 in the cloud firewall (on Oracle: the VCN's
+   security list). Point a free domain at its public IP (for example a DuckDNS name).
+2. On the server:
+
+   ```bash
+   git clone https://github.com/Nouman-wp/Kohaku.git && cd Kohaku
+   sudo bash deploy/vm/setup.sh kohaku-api.duckdns.org
+   ```
+
+   It installs Node 24, pnpm and Caddy (automatic HTTPS), puts the code in `/opt/kohaku` under a
+   `kohaku` user and installs the `kohaku@<network>` systemd unit.
+3. Copy `.env.testnet` to `/opt/kohaku/` (scp; it never goes through git) and run the setup script
+   again to lock its permissions. Bring the ledger too: stop the backend here and copy
+   `.data/kohaku-hashkey-testnet-*.sqlite*`, or restore it from the Supabase mirror (section 5).
+4. `sudo systemctl enable --now kohaku@testnet`, then `journalctl -u kohaku@testnet -f`.
+5. Here: `node scripts/publish-web.mjs testnet --backend https://kohaku-api.duckdns.org`.
+
+Mainnet runs next to it on its own ports (`PORT=8797`, `FLEET_PORT=8798`, `EDGE_PORT=8800` in
+`.env.mainnet`) with `kohaku@mainnet` and a second domain in `/etc/caddy/Caddyfile`.
+
+## 5. Supabase mirror
 
 SQLite stays the clearing service's engine; Supabase can keep a live copy of it, for an off-server
 backup and a dashboard of agents, operators, jobs, IOUs and settlements (DECISIONS §27).
@@ -123,7 +154,7 @@ and later redeploys share one free project. The `operators` view lists every ope
 its agents and intents. A free project pauses after a week without activity; a running backend
 writes every epoch, which keeps it awake.
 
-## 5. Switching HSP to HashKey Merchant
+## 6. Switching HSP to HashKey Merchant
 
 When HashKey has onboarded the merchant (app key, app secret, merchant public key registered, test
 USDC in the agents' wallets):
@@ -142,7 +173,7 @@ clearing service and the agents run the same code: orders go to HashKey, debtors
 HashKey's `pay-mandate`, and HashKey relays the transfers. The website shows "HashKey Merchant"
 instead of "HSP local gateway".
 
-## 6. Mainnet (chain 177)
+## 7. Mainnet (chain 177)
 
 `node scripts/wallets.mjs mainnet` writes `.env.mainnet` with the researched settings:
 
@@ -164,7 +195,7 @@ node scripts/fund.mjs mainnet
 node scripts/serve.mjs mainnet
 ```
 
-## 7. Pre-flight before a demo
+## 8. Pre-flight before a demo
 
 - `GET /v1/health`: chain healthy, clearer has gas, HSP healthy, fleet reachable.
 - `node scripts/e2e.mjs` against the deployment (set `KOHAKU_ENV_FILE` or `KOHAKU_API`,

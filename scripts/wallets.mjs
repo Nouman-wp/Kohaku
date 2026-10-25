@@ -45,9 +45,12 @@ WITHDRAWAL_DELAY=${testnet ? "900" : "3600"}
 
 # ── clearing service ─────────────────────────────────────────────────────────
 CLEARER_PRIVATE_KEY=
-PORT=8787
+# mainnet uses its own ports so both networks can run on one server
+PORT=${testnet ? "8787" : "8797"}
+# the one port the website's proxy (or Caddy on a server) talks to
+EDGE_PORT=${testnet ? "8790" : "8800"}
 # the public base every link and agent card uses (the Vercel domain proxies to this machine)
-PUBLIC_API_URL=http://localhost:8787
+PUBLIC_API_URL=http://localhost:${testnet ? "8787" : "8797"}
 EPOCH_INTAKE_SECONDS=${testnet ? "90" : "600"}
 EPOCH_CHALLENGE_SECONDS=20
 DISPUTE_WINDOW_SECONDS=15
@@ -76,9 +79,10 @@ HSP_COIN=USDC
 HSP_GATEWAY_RELAYER_KEY=
 
 # ── agent fleet ──────────────────────────────────────────────────────────────
-FLEET_PORT=8788
-PUBLIC_FLEET_URL=http://localhost:8788
-CLEARING_URL=http://localhost:8787
+FLEET_PORT=${testnet ? "8788" : "8798"}
+PUBLIC_FLEET_URL=http://localhost:${testnet ? "8788" : "8798"}
+CLEARING_URL=http://localhost:${testnet ? "8787" : "8797"}
+FLEET_CONTROL_URL=http://localhost:${testnet ? "8788" : "8798"}
 FLEET_SEED=
 FLEET_OPERATOR_KEY=
 ROGUE_OPERATOR_KEY=
@@ -88,7 +92,7 @@ COLLATERAL_TARGET=${testnet ? "5" : "2"}
 ORCHESTRATOR_COLLATERAL=${testnet ? "20" : "5"}
 WALLET_TARGET=${testnet ? "5" : "1"}
 GAS_TARGET=${testnet ? "0.004" : "0.5"}
-GUEST_SESSIONS_PER_HOUR=10
+GUEST_SESSIONS_PER_HOUR=${testnet ? "10" : "0"}
 
 # ── Supabase mirror (optional) ───────────────────────────────────────────────
 # Project URL and secret key (Project Settings > API keys). Server side only: the key

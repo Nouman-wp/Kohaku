@@ -1,0 +1,22 @@
+# Kohaku backend for one network: clearing service, agent fleet and edge proxy (scripts/serve.mjs).
+#   sudo systemctl enable --now kohaku@testnet     (and kohaku@mainnet, which uses its own ports)
+[Unit]
+Description=Kohaku backend (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=kohaku
+WorkingDirectory=/opt/kohaku
+ExecStart=/usr/bin/node scripts/serve.mjs %i
+Restart=always
+RestartSec=10
+# serve.mjs stops the clearing service and the fleet itself on SIGTERM
+KillMode=mixed
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
