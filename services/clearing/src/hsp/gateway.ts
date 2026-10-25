@@ -18,6 +18,8 @@ import {
   decimalToUnits,
   decodeX402,
   hspHash,
+  nonceManager,
+  sendWithNonceRetry,
   type HspCartMandate,
   type HspPaymentMandate,
   type HspPaymentRecord,
@@ -89,7 +91,7 @@ export class LocalHspGateway {
     private readonly client: PublicClient,
     readonly o: GatewayOptions,
   ) {
-    this.relayer = privateKeyToAccount(o.relayerKey);
+    this.relayer = privateKeyToAccount(o.relayerKey, { nonceManager });
     this.wallet = createWalletClient({ chain: o.chain, transport: http(o.rpcUrl), account: this.relayer, pollingInterval: o.chain.id === 31337 ? 250 : 1_000 });
     db.raw.exec(`CREATE TABLE IF NOT EXISTS hsp_gateway_flows (
       flow_id TEXT PRIMARY KEY,
@@ -306,10 +308,11 @@ export class LocalHspGateway {
     this.setStatus(f.flow_id, "payment-submitted", { payer: a!.from, detailsId: pmc.payment_details_id });
     let hash: Hex;
     try {
-      hash = (await (this.queue = this.queue.then(
-        () => this.wallet.writeContract({ address: method.contract_address, abi: mockUsdcAbi, functionName: "transferWithAuthorization", args, account: this.relayer, chain: this.o.chain }),
-        () => this.wallet.writeContract({ address: method.contract_address, abi: mockUsdcAbi, functionName: "transferWithAuthorization", args, account: this.relayer, chain: this.o.chain }),
-      ))) as Hex;
+      const relay = () =>
+        sendWithNonceRetry(this.relayer.address, this.o.chain.id, () =>
+          this.wallet.writeContract({ address: method.contract_address, abi: mockUsdcAbi, functionName: "transferWithAuthorization", args, account: this.relayer, chain: this.o.chain }),
+        );
+      hash = (await (this.queue = this.queue.then(relay, relay))) as Hex;
     } catch (err) {
       this.setStatus(f.flow_id, "payment-failed", { reason: shortError(err) });
       return fail(50001, `relay failed: ${shortError(err)}`);

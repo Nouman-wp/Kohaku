@@ -27,6 +27,8 @@ import {
   hashJson,
   iouDigest,
   jobHash,
+  nonceManager,
+  routeUrl,
   quoteDigest,
   usd,
   type A2AAgentCard,
@@ -125,6 +127,8 @@ export class KohakuAgent {
   private epochCache: { epoch: number; intakeEndsAt: number } | null = null;
   private paid = new Map<string, PaymentReport>();
   private settling = false;
+  /** public URL prefixes this agent can reach locally (see routeUrl) */
+  routes: [string, string][] = [];
 
   private constructor(opts: { account: Account; client: ClearingClient; cfg: ClearingConfig; rpcUrl: string; agentId: bigint }) {
     this.account = opts.account;
@@ -144,7 +148,7 @@ export class KohakuAgent {
   static async connect(opts: { privateKey: Hex; clearingUrl: string; rpcUrl?: string; agentId?: bigint }): Promise<KohakuAgent> {
     const client = new ClearingClient(opts.clearingUrl);
     const cfg = await client.config();
-    const account = privateKeyToAccount(opts.privateKey);
+    const account = privateKeyToAccount(opts.privateKey, { nonceManager });
     const agent = new KohakuAgent({ account, client, cfg, rpcUrl: opts.rpcUrl ?? cfg.chain.rpc, agentId: opts.agentId ?? 0n });
     if (!opts.agentId) agent.agentId = await agent.lookupAgentId();
     return agent;
@@ -529,7 +533,7 @@ export class KohakuAgent {
   }
 
   private async callSeller(seller: AgentSummary, kohaku: Record<string, unknown>): Promise<unknown> {
-    const url = seller.endpoint;
+    const url = routeUrl(seller.endpoint, this.routes);
     if (!url) throw new Error(`agent #${seller.agentId} has no endpoint`);
     const res = await fetch(url, {
       method: "POST",

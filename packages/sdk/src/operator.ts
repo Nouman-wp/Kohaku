@@ -11,7 +11,7 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { CHAINS, INTENT_TYPES, REVOCATION_TYPES, chainKeyFromId, intentDigest, type IntentMandate } from "@kohaku/core";
+import { CHAINS, INTENT_TYPES, REVOCATION_TYPES, chainKeyFromId, intentDigest, nonceManager, sendWithNonceRetry, type IntentMandate } from "@kohaku/core";
 import { collateralVaultAbi, erc20Abi, identityRegistryAbi, mockUsdcAbi, validationRegistryAbi } from "@kohaku/core/abis";
 import type { ClearingClient, ClearingConfig } from "./client.ts";
 
@@ -31,7 +31,7 @@ export class Operator {
     privateKey: Hex,
     rpcUrl = cfg.chain.rpc,
   ) {
-    this.account = privateKeyToAccount(privateKey);
+    this.account = privateKeyToAccount(privateKey, { nonceManager });
     const base = CHAINS[chainKeyFromId(cfg.chain.id)];
     this.chain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
     this.publicClient = createPublicClient({ chain: this.chain, transport: http(rpcUrl), pollingInterval: this.chain.id === 31337 ? 250 : 1_000 }) as PublicClient;
@@ -43,8 +43,10 @@ export class Operator {
   }
 
   private async send(address: Address, abi: readonly unknown[], functionName: string, args: readonly unknown[]) {
-    const { request } = await this.publicClient.simulateContract({ address, abi, functionName, args, account: this.account } as never);
-    const hash = await this.wallet.writeContract(request as never);
+    const hash = await sendWithNonceRetry(this.account.address, this.chain.id, async () => {
+      const { request } = await this.publicClient.simulateContract({ address, abi, functionName, args, account: this.account } as never);
+      return this.wallet.writeContract(request as never);
+    });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
     if (receipt.status !== "success") throw new Error(`${functionName} reverted (${hash})`);
     return receipt;
@@ -127,28 +129,32 @@ export class Operator {
   }
 
   async sendGas(to: Address, amount: bigint) {
-    const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.chain, to, value: amount });
+    const hash = await sendWithNonceRetry(this.account.address, this.chain.id, () => this.wallet.sendTransaction({ account: this.account, chain: this.chain, to, value: amount }));
     return this.publicClient.waitForTransactionReceipt({ hash });
   }
 
   async stakeAsValidator(validatorWallet: WalletClient & { account: Account }, amount: bigint) {
-    const approve = await validatorWallet.writeContract({
-      account: validatorWallet.account,
-      chain: this.chain,
-      address: this.cfg.deployment.token,
-      abi: erc20Abi,
-      functionName: "approve",
-      args: [this.cfg.deployment.validationRegistry, amount],
-    });
+    const approve = await sendWithNonceRetry(validatorWallet.account.address, this.chain.id, () =>
+      validatorWallet.writeContract({
+        account: validatorWallet.account,
+        chain: this.chain,
+        address: this.cfg.deployment.token,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [this.cfg.deployment.validationRegistry, amount],
+      }),
+    );
     await this.publicClient.waitForTransactionReceipt({ hash: approve });
-    const tx = await validatorWallet.writeContract({
-      account: validatorWallet.account,
-      chain: this.chain,
-      address: this.cfg.deployment.validationRegistry,
-      abi: validationRegistryAbi,
-      functionName: "stake",
-      args: [amount],
-    });
+    const tx = await sendWithNonceRetry(validatorWallet.account.address, this.chain.id, () =>
+      validatorWallet.writeContract({
+        account: validatorWallet.account,
+        chain: this.chain,
+        address: this.cfg.deployment.validationRegistry,
+        abi: validationRegistryAbi,
+        functionName: "stake",
+        args: [amount],
+      }),
+    );
     return this.publicClient.waitForTransactionReceipt({ hash: tx });
   }
 

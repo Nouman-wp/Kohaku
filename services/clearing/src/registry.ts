@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 import {
   KOHAKU_PRICING_EXTENSION,
+  routeUrl,
   type A2AAgentCard,
   type Erc8004Registration,
   type ServiceListing,
@@ -51,6 +52,8 @@ export class Registry {
   private bySignerMap = new Map<string, bigint>();
   private collateral = new Map<string, { at: number; acc: VaultAccount }>();
   private syncing = false;
+  /** public URL prefixes of co-located services, fetched locally (see routeUrl) */
+  routes: [string, string][] = [];
 
   constructor(
     private readonly db: Db,
@@ -84,7 +87,8 @@ export class Registry {
       const total = Number(await this.chain.totalAgents());
       for (let id = 1; id <= total; id++) {
         const known = this.agents.get(String(id));
-        if (known && !full) continue;
+        // agents whose card could not be fetched yet (host down, not serving yet) are retried
+        if (known && !full && known.name !== `Agent #${id}`) continue;
         await this.refresh(BigInt(id));
       }
     } catch (err) {
@@ -97,7 +101,7 @@ export class Registry {
   async refresh(agentId: bigint): Promise<AgentRecord | undefined> {
     const on = await this.chain.agent(agentId);
     const prev = this.get(agentId);
-    const card = await fetchCard(on.uri).catch(() => null);
+    const card = await fetchCard(on.uri, this.routes).catch(() => null);
     const rec: AgentRecord = {
       agentId,
       slug: card?.slug ?? prev?.slug ?? `agent-${agentId}`,
@@ -201,13 +205,13 @@ interface FetchedCard {
  * Resolve tokenURI -> ERC-8004 registration file -> A2A agent card. The registration may
  * also be the A2A card itself; both shapes are accepted.
  */
-async function fetchCard(uri: string): Promise<FetchedCard | null> {
+async function fetchCard(uri: string, routes: readonly (readonly [string, string])[]): Promise<FetchedCard | null> {
   if (!/^https?:\/\//.test(uri)) return null;
-  const first = (await getJson(uri)) as Partial<Erc8004Registration & A2AAgentCard & { kohaku?: Record<string, unknown> }>;
+  const first = (await getJson(routeUrl(uri, routes))) as Partial<Erc8004Registration & A2AAgentCard & { kohaku?: Record<string, unknown> }>;
   let card: Partial<A2AAgentCard & { kohaku?: Record<string, unknown> }> = first;
   if (first.type?.includes("eip-8004")) {
     const a2a = first.endpoints?.find((e) => e.name.toLowerCase() === "a2a");
-    if (a2a) card = (await getJson(a2a.endpoint)) as typeof card;
+    if (a2a) card = (await getJson(routeUrl(a2a.endpoint, routes))) as typeof card;
   }
   const ext = card.capabilities?.extensions?.find((e) => e.uri === KOHAKU_PRICING_EXTENSION);
   const prices = ext?.params?.prices ?? {};

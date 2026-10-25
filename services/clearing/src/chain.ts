@@ -21,7 +21,7 @@ import {
   validationRegistryAbi,
   erc20Abi,
 } from "@kohaku/core/abis";
-import { CHAINS, type ChainKey, type Deployment } from "@kohaku/core";
+import { CHAINS, nonceManager, sendWithNonceRetry, type ChainKey, type Deployment } from "@kohaku/core";
 import { log } from "./bus.ts";
 
 export interface VaultAccount {
@@ -66,7 +66,7 @@ export class Chain {
     this.viemChain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
     const pollingInterval = key === "local" ? 250 : 1_000;
     this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000 }), pollingInterval }) as PublicClient;
-    this.account = privateKeyToAccount(clearerKey);
+    this.account = privateKeyToAccount(clearerKey, { nonceManager });
     this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000 }), account: this.account, pollingInterval });
   }
 
@@ -84,11 +84,13 @@ export class Chain {
     const run = async () => {
       const started = Date.now();
       try {
-        const { request } = await this.publicClient.simulateContract({
-          ...(params as object),
-          account: this.account,
-        } as never);
-        const hash = await this.wallet.writeContract(request as never);
+        const hash = await sendWithNonceRetry(this.account.address, this.viemChain.id, async () => {
+          const { request } = await this.publicClient.simulateContract({
+            ...(params as object),
+            account: this.account,
+          } as never);
+          return this.wallet.writeContract(request as never);
+        });
         const receipt = await this.publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
         if (receipt.status !== "success") throw new Error(`${label}: transaction ${hash} reverted`);
         this.healthy = true;
@@ -110,7 +112,7 @@ export class Chain {
   /** Plain value transfer through the same queue (used to fund the local gateway's relayer). */
   sendValue(to: Address, value: bigint): Promise<TransactionReceipt> {
     const run = async () => {
-      const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.viemChain, to, value });
+      const hash = await sendWithNonceRetry(this.account.address, this.viemChain.id, () => this.wallet.sendTransaction({ account: this.account, chain: this.viemChain, to, value }));
       return this.publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
     };
     const next = this.queue.then(run, run);

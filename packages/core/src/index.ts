@@ -5,3 +5,4 @@ export * from "./netting.ts";
 export * from "./reputation.ts";
 export * from "./types.ts";
 export * from "./hsp.ts";
+export * from "./tx.ts";

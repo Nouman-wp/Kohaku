@@ -149,6 +149,8 @@ export class Fleet {
     for (const m of MEMBERS) {
       const agent = await KohakuAgent.connect({ privateKey: agentKey(this.cfg.seed, m.slug), clearingUrl: this.cfg.clearingUrl, rpcUrl: this.cfg.rpcUrl });
       agent.setProfile({ ...m.profile, slug: m.slug, baseUrl: `${this.cfg.publicUrl}/agents/${m.slug}` });
+      // fellow fleet agents are served from this process: no round trip through the public URL
+      agent.routes = [[`${this.cfg.publicUrl}/agents/`, `http://127.0.0.1:${this.cfg.port}/agents/`]];
       m.install(this, agent);
       this.agents.set(m.slug, agent);
     }

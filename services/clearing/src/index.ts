@@ -27,6 +27,9 @@ async function main(): Promise<void> {
   const domain = kohakuDomain(chain.viemChain.id, cfg.deployment.clearingHouse);
 
   const registry = new Registry(db, chain);
+  if (cfg.PUBLIC_FLEET_URL && cfg.PUBLIC_FLEET_URL !== cfg.FLEET_CONTROL_URL) {
+    registry.routes = [[`${cfg.PUBLIC_FLEET_URL.replace(/\/+$/, "")}/`, `${cfg.FLEET_CONTROL_URL.replace(/\/+$/, "")}/`]];
+  }
   await registry.sync(true);
   const rep = new ReputationBook(db);
   const intents = new Intents(db, registry, domain);

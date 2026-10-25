@@ -58,6 +58,8 @@ const schema = z.object({
   /** quiet epochs stay open until the first IOU arrives, so an idle clearing house spends no gas */
   EPOCH_EXTEND_IDLE: z.enum(["true", "false"]).optional(),
   FLEET_CONTROL_URL: z.string().default("http://localhost:8788"),
+  /** the fleet's public base; cards under it are fetched from FLEET_CONTROL_URL directly */
+  PUBLIC_FLEET_URL: z.string().optional(),
   ADMIN_TOKEN: z.string().min(8).default("kohaku-admin"),
   CORS_ORIGIN: z.string().default("*"),
 });
