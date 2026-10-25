@@ -2,7 +2,7 @@ import type { Hex } from "viem";
 import { kohakuDomain, HSP_CHAIN_NAMES } from "@kohaku/core";
 import { mockUsdcAbi } from "@kohaku/core/abis";
 import { merchantKey } from "@kohaku/core/hsp-node";
-import { loadConfig } from "./config.ts";
+import { ledgerName, loadConfig } from "./config.ts";
 import { Db } from "./db.ts";
 import { Chain } from "./chain.ts";
 import { Registry } from "./registry.ts";
@@ -14,6 +14,7 @@ import { Settlements } from "./settlements.ts";
 import { HspMerchantClient, MerchantHsp } from "./hsp/merchant.ts";
 import { LocalHspGateway } from "./hsp/gateway.ts";
 import { buildApi } from "./api.ts";
+import { removeMirror, SupabaseMirror } from "./mirror.ts";
 import { bus, log } from "./bus.ts";
 import { headlineStats } from "./stats.ts";
 
@@ -23,7 +24,7 @@ async function main(): Promise<void> {
   if (!(await chain.ping())) throw new Error(`cannot reach ${cfg.chain} RPC at ${cfg.rpcUrl}: ${chain.lastError}`);
 
   // one database per deployment, so a redeploy never mixes ledgers
-  const db = new Db(cfg.DATA_DIR, `kohaku-${cfg.chain}-${cfg.deployment.clearingHouse.slice(2, 10).toLowerCase()}.sqlite`);
+  const db = new Db(cfg.DATA_DIR, `${ledgerName(cfg)}.sqlite`);
   const domain = kohakuDomain(chain.viemChain.id, cfg.deployment.clearingHouse);
 
   const registry = new Registry(db, chain);
@@ -105,7 +106,14 @@ async function main(): Promise<void> {
   );
   await epochs.start();
 
-  const app = await buildApi({ cfg, db, chain, registry, rep, intents, ledger, epochs, settlements, hsp, gateway, domain, hspHealthy: () => hspHealthy });
+  // off-server copy of the ledger in Supabase, when configured
+  let mirror: SupabaseMirror | undefined;
+  if (cfg.SUPABASE_URL && cfg.SUPABASE_SECRET_KEY) {
+    mirror = new SupabaseMirror(db, { url: cfg.SUPABASE_URL, key: cfg.SUPABASE_SECRET_KEY, deployment: ledgerName(cfg) });
+    mirror.start();
+  } else removeMirror(db);
+
+  const app = await buildApi({ cfg, db, chain, registry, rep, intents, ledger, epochs, settlements, hsp, gateway, mirror, domain, hspHealthy: () => hspHealthy });
   await app.listen({ port: cfg.PORT, host: "0.0.0.0" });
   hspHealthy = await hsp.health();
 
@@ -123,10 +131,12 @@ async function main(): Promise<void> {
     }
   }, 2_000);
 
-  log("info", "clearing", `Kohaku clearing service on :${cfg.PORT} | chain ${cfg.chain} (${chain.viemChain.id}) | clearing house ${cfg.deployment.clearingHouse} | HSP ${local ? "local gateway" : `merchant ${cfg.HSP_BASE_URL}`}${hspHealthy ? "" : " (unreachable)"}`);
+  log("info", "clearing", `Kohaku clearing service on :${cfg.PORT} | chain ${cfg.chain} (${chain.viemChain.id}) | clearing house ${cfg.deployment.clearingHouse} | HSP ${local ? "local gateway" : `merchant ${cfg.HSP_BASE_URL}`}${hspHealthy ? "" : " (unreachable)"} | mirror ${mirror ? cfg.SUPABASE_URL : "off"}`);
 
   const shutdown = async () => {
     epochs.stop();
+    mirror?.stop();
+    await mirror?.flush();
     await app.close();
     db.raw.close();
     process.exit(0);

@@ -14,6 +14,7 @@ import type { EpochEngine } from "./epochs.ts";
 import type { Settlements } from "./settlements.ts";
 import type { HspPort } from "./hsp/port.ts";
 import type { LocalHspGateway } from "./hsp/gateway.ts";
+import type { SupabaseMirror } from "./mirror.ts";
 import { acceptWebhook } from "./hsp/webhook.ts";
 import { headlineStats } from "./stats.ts";
 import { verifyEpoch } from "./verify.ts";
@@ -48,6 +49,8 @@ export interface Ctx {
   hsp: HspPort;
   /** Kohaku's local HSP gateway, mounted at /hsp when HSP_MODE=local */
   gateway?: LocalHspGateway;
+  /** Supabase copy of the database, when SUPABASE_URL is set */
+  mirror?: SupabaseMirror;
   domain: TypedDataDomain;
   hspHealthy: () => boolean;
 }
@@ -129,6 +132,7 @@ export async function buildApi(ctx: Ctx): Promise<FastifyInstance> {
         pool: pool ? { balance: pool.balance.toString(), accounted: pool.accounted.toString(), surplus: (pool.balance - pool.accounted).toString() } : null,
       },
       hsp: { ...hsp.info(), healthy: ctx.hspHealthy() },
+      mirror: ctx.mirror?.status() ?? { enabled: false },
       fleet,
     };
   });

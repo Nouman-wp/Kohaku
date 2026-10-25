@@ -93,20 +93,7 @@ export class LocalHspGateway {
   ) {
     this.relayer = privateKeyToAccount(o.relayerKey, { nonceManager });
     this.wallet = createWalletClient({ chain: o.chain, transport: http(o.rpcUrl), account: this.relayer, pollingInterval: o.chain.id === 31337 ? 250 : 1_000 });
-    db.raw.exec(`CREATE TABLE IF NOT EXISTS hsp_gateway_flows (
-      flow_id TEXT PRIMARY KEY,
-      cart_mandate_id TEXT NOT NULL UNIQUE,
-      payment_request_id TEXT NOT NULL,
-      cart_json TEXT NOT NULL,
-      amount TEXT NOT NULL,
-      status TEXT NOT NULL,
-      status_reason TEXT,
-      payer TEXT,
-      payment_details_id TEXT,
-      tx TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )`);
+    // its flows live in hsp_gateway_flows (db.ts)
   }
 
   get relayerAddress(): Address {

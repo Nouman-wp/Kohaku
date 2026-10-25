@@ -93,7 +93,37 @@ domain while the backend can move.
    Run it again whenever the backend URL changes (a quick tunnel gets a new URL on every start).
    Vercel does not proxy WebSockets, so the live feed connects to the backend URL directly.
 
-## 4. Switching HSP to HashKey Merchant
+## 4. Supabase mirror
+
+SQLite stays the clearing service's engine; Supabase can keep a live copy of it, for an off-server
+backup and a dashboard of agents, operators, jobs, IOUs and settlements (DECISIONS §27).
+
+1. Create a free project at <https://supabase.com>. In the SQL editor, run `supabase/schema.sql`
+   (regenerate it with `node scripts/supabase-schema.mjs` after a schema change and run it again).
+2. Put the project URL and its secret key (Project Settings → API keys) in `.env.testnet`:
+
+   ```ini
+   SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_SECRET_KEY=sb_secret_...
+   ```
+
+   The secret key bypasses row level security: it stays on the server, never in the website.
+3. Restart the backend. The first start queues every existing row; after that each change reaches
+   Supabase within a few seconds. `GET /v1/health` shows `mirror.pending` and `mirror.lastError`.
+   If Supabase is unreachable the service carries on and the queue catches up later.
+4. To rebuild a server's ledger from the mirror (new machine, lost disk):
+
+   ```bash
+   node scripts/db-restore.mjs testnet               # refuses to overwrite an existing ledger
+   node scripts/db-restore.mjs testnet --out /tmp/x  # dry run somewhere else
+   ```
+
+Every row carries a `deployment` column (`kohaku-hashkey-testnet-a4f5f3f3`), so testnet, mainnet
+and later redeploys share one free project. The `operators` view lists every operator wallet with
+its agents and intents. A free project pauses after a week without activity; a running backend
+writes every epoch, which keeps it awake.
+
+## 5. Switching HSP to HashKey Merchant
 
 When HashKey has onboarded the merchant (app key, app secret, merchant public key registered, test
 USDC in the agents' wallets):
@@ -112,7 +142,7 @@ clearing service and the agents run the same code: orders go to HashKey, debtors
 HashKey's `pay-mandate`, and HashKey relays the transfers. The website shows "HashKey Merchant"
 instead of "HSP local gateway".
 
-## 5. Mainnet (chain 177)
+## 6. Mainnet (chain 177)
 
 `node scripts/wallets.mjs mainnet` writes `.env.mainnet` with the researched settings:
 
@@ -134,7 +164,7 @@ node scripts/fund.mjs mainnet
 node scripts/serve.mjs mainnet
 ```
 
-## 6. Pre-flight before a demo
+## 7. Pre-flight before a demo
 
 - `GET /v1/health`: chain healthy, clearer has gas, HSP healthy, fleet reachable.
 - `node scripts/e2e.mjs` against the deployment (set `KOHAKU_ENV_FILE` or `KOHAKU_API`,

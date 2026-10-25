@@ -291,3 +291,18 @@ why. Newest decisions are at the bottom of each section.
   never breaks them. Vercel does not proxy WebSockets, so the live feed connects to the backend
   directly. Services on the same machine reach each other locally instead of through the public URL.
 
+### 27. Supabase mirrors the ledger; SQLite stays the engine
+
+- **Asked:** keep the off-chain data about agents and users in a Supabase database.
+- **Found:** the clearing service makes 130+ synchronous SQLite calls, and every epoch step runs
+  inside SQLite transactions that the restart-and-resume logic depends on. Moving all of that to a
+  remote Postgres a week before the deadline would rewrite the money path for no gain in safety.
+- **Kohaku:** SQLite stays the engine. With `SUPABASE_URL` and `SUPABASE_SECRET_KEY` set, triggers
+  queue every insert and update in a local outbox, inside the same transaction as the write, and the
+  service upserts them to Supabase's REST API every few seconds (`services/clearing/src/mirror.ts`).
+  Rows leave the outbox only once Supabase accepts them, so an outage only delays the copy.
+  `scripts/db-restore.mjs` rebuilds a ledger from the mirror; a round trip of the testnet ledger
+  came back identical, table for table. JSON stays the exact text the service wrote (cast with
+  `::jsonb` to query it), because Postgres `jsonb` reorders keys and a restore must be exact. Row
+  level security is on with no policies: only the server's secret key reads or writes. "Users" are
+  the operator wallets, listed by the `operators` view.

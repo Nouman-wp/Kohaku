@@ -206,7 +206,8 @@ packages/mcp      MCP server
 services/clearing clearing service
 services/fleet    live agent fleet + scenario runner
 apps/web          website
-scripts/          dev, deploy, wallets, fund, serve, publish-web, e2e
+scripts/          dev, deploy, wallets, fund, serve, publish-web, e2e, db-restore
+supabase/         Postgres schema for the optional Supabase mirror of the ledger
 DECISIONS.md      every departure from the brief, and why
 ```
 

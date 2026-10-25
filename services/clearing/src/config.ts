@@ -62,6 +62,9 @@ const schema = z.object({
   PUBLIC_FLEET_URL: z.string().optional(),
   ADMIN_TOKEN: z.string().min(8).default("kohaku-admin"),
   CORS_ORIGIN: z.string().default("*"),
+  /** optional Supabase mirror of this database: project URL and its secret key (server side only) */
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_SECRET_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema> & {
@@ -109,6 +112,11 @@ export function loadConfig(): Config {
     hspRelayerKey: (env.HSP_GATEWAY_RELAYER_KEY ?? derived(env.CLEARER_PRIVATE_KEY, "hsp-gateway-relayer")) as Hex,
     extendIdleEpochs: env.EPOCH_EXTEND_IDLE ? env.EPOCH_EXTEND_IDLE === "true" : chain !== "local",
   };
+}
+
+/** This deployment's ledger: names its SQLite file and tags its rows in the Supabase mirror. */
+export function ledgerName(cfg: Pick<Config, "chain" | "deployment">): string {
+  return `kohaku-${cfg.chain}-${cfg.deployment.clearingHouse.slice(2, 10).toLowerCase()}`;
 }
 
 export function deploymentPath(chain: ChainKey): string {

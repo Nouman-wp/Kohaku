@@ -89,6 +89,12 @@ ORCHESTRATOR_COLLATERAL=${testnet ? "20" : "5"}
 WALLET_TARGET=${testnet ? "5" : "1"}
 GAS_TARGET=${testnet ? "0.004" : "0.5"}
 GUEST_SESSIONS_PER_HOUR=10
+
+# ── Supabase mirror (optional) ───────────────────────────────────────────────
+# Project URL and secret key (Project Settings > API keys). Server side only: the key
+# bypasses row level security. Leave empty to keep the mirror off.
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 `;
 
 function parse(text) {
