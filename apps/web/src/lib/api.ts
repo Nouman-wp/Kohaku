@@ -14,6 +14,8 @@ import type {
 
 export const API = (import.meta.env.VITE_KOHAKU_API as string).replace(/\/+$/, "");
 export const FLEET = (import.meta.env.VITE_KOHAKU_FLEET as string).replace(/\/+$/, "");
+/** The live feed's own origin, for hosts that proxy REST but not WebSockets (Vercel). */
+const LIVE = ((import.meta.env.VITE_KOHAKU_WS as string) || API.replace(/^http/, "ws")).replace(/\/+$/, "");
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
@@ -169,7 +171,7 @@ function connect(delay = 0) {
   setTimeout(() => {
     let ws: WebSocket;
     try {
-      ws = new WebSocket(`${API.replace(/^http/, "ws")}/v1/live`);
+      ws = new WebSocket(`${LIVE}/v1/live`);
     } catch {
       connect(Math.min(10_000, delay * 2 + 1_000));
       return;

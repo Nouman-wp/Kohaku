@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "import.meta.env.VITE_KOHAKU_API": JSON.stringify(env.VITE_KOHAKU_API ?? "http://localhost:8787"),
       "import.meta.env.VITE_KOHAKU_FLEET": JSON.stringify(env.VITE_KOHAKU_FLEET ?? "http://localhost:8788"),
+      "import.meta.env.VITE_KOHAKU_WS": JSON.stringify(env.VITE_KOHAKU_WS ?? ""),
     },
     server: { port: 5173, host: true },
     build: { target: "es2022", chunkSizeWarningLimit: 1500 },

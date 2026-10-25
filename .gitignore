@@ -40,3 +40,7 @@ DESIGN.md
 ProjectGuide.md
 contracts/deployments/31337.json
 contracts/broadcast/**/31337/
+contracts/broadcast/**/*.lock
+
+# vercel link
+.vercel/

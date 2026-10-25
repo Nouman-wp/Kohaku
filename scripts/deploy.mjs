@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Deploy the Kohaku contracts.
-//   node scripts/deploy.mjs local            anvil, mock token
-//   node scripts/deploy.mjs hashkey-testnet  HashKey Chain testnet (133), verified on Blockscout
-//   node scripts/deploy.mjs hashkey          HashKey Chain mainnet (177), verified on Blockscout
+//   node scripts/deploy.mjs local            anvil, test token
+//   node scripts/deploy.mjs hashkey-testnet  HashKey Chain testnet (133), keys from .env.testnet
+//   node scripts/deploy.mjs hashkey          HashKey Chain mainnet (177), keys from .env.mainnet
+// Contracts are verified on Blockscout when the explorer is reachable.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ANVIL_KEYS, ROOT, bin, loadEnv, runToEnd } from "./lib.mjs";
+import { ANVIL_KEYS, ROOT, bin, loadEnv, runToEnd, useNetworkEnv } from "./lib.mjs";
 
 const NETWORKS = {
   local: { rpc: "http://127.0.0.1:8545", id: 31337 },
@@ -14,9 +15,13 @@ const NETWORKS = {
   hashkey: { rpc: "https://mainnet.hsk.xyz", id: 177, verifier: "https://hashkey.blockscout.com/api/" },
 };
 
-export async function deploy(network) {
+const ALIASES = { testnet: "hashkey-testnet", mainnet: "hashkey" };
+
+export async function deploy(name) {
+  const network = ALIASES[name] ?? name;
   const net = NETWORKS[network];
-  if (!net) throw new Error(`unknown network ${network}; use local, hashkey-testnet or hashkey`);
+  if (!net) throw new Error(`unknown network ${name}; use local, testnet or mainnet`);
+  if (network !== "local" && !process.env.KOHAKU_ENV_FILE) useNetworkEnv(network === "hashkey" ? "mainnet" : "testnet");
   const env = { ...loadEnv(), ...process.env };
   const key = env.DEPLOYER_PRIVATE_KEY || (network === "local" ? ANVIL_KEYS[0] : "");
   if (!key) throw new Error("set DEPLOYER_PRIVATE_KEY in .env");
@@ -31,7 +36,14 @@ export async function deploy(network) {
     console.log(`clearer (from CLEARER_PRIVATE_KEY): ${clearer}`);
   }
   const args = ["script", "script/Deploy.s.sol:Deploy", "--rpc-url", env.RPC_URL && network !== "local" ? env.RPC_URL : net.rpc, "--broadcast", "--slow"];
-  if (net.verifier) args.push("--verify", "--verifier", "blockscout", "--verifier-url", net.verifier);
+  if (net.verifier) {
+    const up = await fetch(net.verifier.replace(/api\/$/, ""), { signal: AbortSignal.timeout(8_000) }).then(
+      (r) => r.status < 500,
+      () => false,
+    );
+    if (up) args.push("--verify", "--verifier", "blockscout", "--verifier-url", net.verifier);
+    else console.warn(`explorer ${net.verifier} is unreachable; deploying without source verification (re-run forge verify-contract later)`);
+  }
   await runToEnd("deploy", bin("forge"), args, {
     cwd: join(ROOT, "contracts"),
     env: {

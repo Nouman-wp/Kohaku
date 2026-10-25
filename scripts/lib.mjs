@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,6 +49,22 @@ export function ensureLocalEnv() {
     ].join("\n"),
   );
   return true;
+}
+
+/** `testnet` -> .env.testnet, `mainnet` -> .env.mainnet; sets KOHAKU_ENV_FILE for child processes too. */
+export function useNetworkEnv(name) {
+  if (!name || name === "local") return;
+  const file = name.startsWith(".env") ? name : `.env.${name}`;
+  process.env.KOHAKU_ENV_FILE = file;
+  return file;
+}
+
+export function cast(args) {
+  return execFileSync(bin("cast"), args, { encoding: "utf8" }).trim();
+}
+
+export function addressOf(privateKey) {
+  return cast(["wallet", "address", "--private-key", privateKey]);
 }
 
 export function bin(name) {
