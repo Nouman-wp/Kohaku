@@ -482,13 +482,16 @@ grant all on public.hsp_gateway_flows to service_role;
 
 -- The people behind the agents: every operator wallet, with what it runs and signs.
 create or replace view public.operators with (security_invoker = true) as
-select a.deployment,
-       lower(a.operator) as operator,
-       count(*) as agents,
-       string_agg(a.name, ', ' order by a.agent_id) as agent_names,
-       to_timestamp(min(a.registered_at) / 1000.0) as first_seen,
-       to_timestamp(max(a.updated_at) / 1000.0) as last_seen,
-       (select count(*) from public.intents i where i.deployment = a.deployment and lower(i.operator) = lower(a.operator)) as intents
-from public.agents a
-group by a.deployment, lower(a.operator);
+select o.*,
+       (select count(*) from public.intents i where i.deployment = o.deployment and lower(i.operator) = o.operator) as intents
+from (
+  select a.deployment,
+         lower(a.operator) as operator,
+         count(*) as agents,
+         string_agg(a.name, ', ' order by a.agent_id) as agent_names,
+         to_timestamp(min(a.registered_at) / 1000.0) as first_seen,
+         to_timestamp(max(a.updated_at) / 1000.0) as last_seen
+  from public.agents a
+  group by a.deployment, lower(a.operator)
+) o;
 grant select on public.operators to service_role;
