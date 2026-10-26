@@ -19,7 +19,10 @@ why. Newest decisions are at the bottom of each section.
   `https://merchant-qa.hashkeymerchant.com`: AP2 cart mandates signed with an ES256K merchant JWT,
   HMAC-SHA256 request signing, x402 v2 payment mandates carrying an EIP-3009
   `TransferWithAuthorization`, statuses `payment-required → payment-included → payment-successful`
-  and webhooks signed `X-Signature: t=…,v1=…`.
+  and webhooks signed `X-Signature: t=…,v1=…`. HashKey has since published its HSP docs
+  (<https://hashkey-merchant.github.io>) and described Track 2 the same way: the paying agent builds
+  a payment mandate from the payment conditions the receiving side sends, signs it with its wallet,
+  and HSP's gateway verifies and executes the payment on chain. What the docs changed is in decision 29.
 - **Kohaku:** follows that route. The clearing service is the merchant. Each net debt is one HSP order
   paying the exact amount to the clearing pool (`pay_to` = the clearing house). The debtor agent pays
   it the way HSP's checkout does, with no human and no gas: it checks the cart is exactly its debt,
@@ -50,11 +53,12 @@ why. Newest decisions are at the bottom of each section.
 - **Brief:** confirm settlement from HSP's signed webhook or by checking status; webhooks must be
   authenticated, fresh and processed exactly once.
 - **Kohaku:** `POST /v1/hsp/webhook` verifies `X-Signature` (HMAC-SHA256 with the app secret over
-  `${t}.${rawBody}`), rejects anything older than five minutes and records event ids before acting,
-  so replays are acknowledged and ignored. A webhook only triggers a check: the settlement is
-  accepted after HSP's HMAC-authenticated status endpoint reports `payment-successful` **and** the
-  chain shows the transfer. Open orders are also polled, so a payment is found even if the webhook
-  and the debtor's report are both lost.
+  `${t}.${rawBody}`), rejects anything older than five minutes and records each event, a
+  `(request_id, status)` pair, before acting, so replays are acknowledged and ignored. A webhook only
+  triggers a check: the settlement is accepted after HSP's HMAC-authenticated status endpoint reports
+  `payment-safe` (or `payment-finalized`) for this order, payee, token and amount **and** the chain
+  shows the transfer. Open orders are also polled, so a payment is found even if the webhook and the
+  debtor's report are both lost.
 
 ### 4. How a payment is bound to one epoch and one exact amount
 
@@ -223,6 +227,12 @@ why. Newest decisions are at the bottom of each section.
     v1.3.0, **no EIP-3009**, so HSP cannot pull it with an authorization. Kohaku settles in USDC.e.
   - testnet USDC `0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6` (HSP's, "USD Coin" v2, EIP-3009) and
     testnet USDT `0x372325443233fEbaC1F6998aC750276468c83CC6` ("HP2 Tether USD"): minting is owner-only.
+  - HashKey's token list (docs.hskchain.net, Token Contracts) and HSP's onboarding table agree:
+    USDC (Bridged USDC) `0x054e…8D0a` settles by EIP-3009 and USDT `0xf1b5…9029` by Permit2.
+  - Chainlink CCIP on HashKey Chain mainnet (chain selector `7613811247471741961`, router
+    `0xf2Fd62c083F3BF324e99ce157D1a42d7EbA77f1d`) carries LINK, WHSK and OpenUSDT
+    (`0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189`, not the USDT HSP accepts), and no USDC. USDC for
+    mainnet agents has to come over a bridge (it is "Bridged USDC"), not CCIP.
 - **Explorers:** mainnet `hashkey.blockscout.com`. The documented testnet explorer
   `testnet-explorer.hsk.xyz` had no DNS record on 25 October 2026, so testnet contracts were deployed
   without source verification; `forge verify-contract` can be re-run when it is back.
@@ -315,3 +325,36 @@ why. Newest decisions are at the bottom of each section.
 - **Kohaku:** Oracle Cloud's Always Free Arm VM (Google Cloud's e2-micro as the fallback), set up by
   `deploy/vm/setup.sh`: Node 24, Caddy for HTTPS, a `kohaku@<network>` systemd unit. Mainnet uses its
   own ports (8797/8798/8800) so both networks can share the machine.
+
+### 29. HSP follows HashKey's published docs
+
+- **Found:** HashKey published its HSP docs (<https://hashkey-merchant.github.io>, v2.3.0 of 16 October
+  2026). They confirm the merchant route of decision 1 and differ from what the GitHub integrations
+  showed in five places: the statuses (`payment-required → submitted → verified → processing →
+  included → safe → finalized`, or `failed`; there is no `payment-successful`), the payment record's
+  field names (`content_id`, `request_id`, `order_amount`, `to_pay_address`, `chain` as CAIP-2), one
+  webhook per status with the same `request_id`, ids that can never be reused (`40001` for a cart
+  mandate id, `10004` for a payment request id), and the hosts: QA
+  `https://merchant-qa.hashkeymerchant.com` for testnet tokens, staging
+  `https://merchant-stg.hashkeymerchant.com` and production `https://hsp.hashkey.com` for mainnet
+  tokens. The docs cover the merchant endpoints only; the payer side (cart-mandate flow,
+  `pay-mandate`, chain config) stays as HSP's checkout calls it.
+- **Kohaku:**
+  - A payment counts from `payment-safe`, which HSP describes as past reorg risk, plus Kohaku's own
+    check of the transfer on chain. `payment-included` is still pending. Earlier gateways'
+    `payment-successful` is still read as success.
+  - HSP's record has to name this order, the pool as payee, the settlement token and the exact debt as
+    `order_amount` before the chain is checked.
+  - Webhook events are `(request_id, status)` pairs, so the safe and finalized calls are not dropped
+    as replays of the included one.
+  - A re-opened order gets fresh ids (`-R<attempt>` on both the cart mandate id and the payment request
+    id). If HSP reports an id as taken, for example after a lost response, the next attempt is opened.
+  - In merchant mode `HSP_BASE_URL` defaults to QA on testnet and production on mainnet. The service
+    refuses to start with a host that serves the other network's tokens, or a settlement token HSP
+    does not settle by EIP-3009.
+  - The local gateway now answers in the same shapes: the same statuses (safe after three blocks on
+    testnet, finalized when the chain's finalized head passes the block), records, webhook bodies,
+    single-use ids and error codes.
+- **Open with HashKey:** whether the merchant can advance the gas fee (`gas_fee_advanced`) so the payer
+  pays exactly the order amount. Kohaku requires the exact debt to reach the pool, and a payment that
+  carried fees would be refused.

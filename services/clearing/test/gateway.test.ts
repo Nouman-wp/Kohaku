@@ -25,7 +25,7 @@ const thief = privateKeyToAccount(("0x" + "b2".repeat(32)) as Hex);
 
 function gateway() {
   const db = new Db(mkdtempSync(join(tmpdir(), "kohaku-gw-")));
-  const client = createPublicClient({ chain: localChain, transport: http("http://127.0.0.1:9") }) as PublicClient;
+  const client = createPublicClient({ chain: localChain, transport: http("http://127.0.0.1:9", { retryCount: 0 }) }) as PublicClient;
   return new LocalHspGateway(db, client, {
     chain: localChain,
     rpcUrl: "http://127.0.0.1:9",
@@ -37,13 +37,13 @@ function gateway() {
   });
 }
 
-function cart(id = "KOHAKU-31337-cf7ed3ac-E1-A1", value = "0.0172", token: string = TOKEN): HspCartContents {
+function cart(id = "KOHAKU-31337-cf7ed3ac-E1-A1", value = "0.0172", token: string = TOKEN, requestId = `PAY-REQ-${id}`): HspCartContents {
   return {
     id,
     user_cart_confirmation_required: true,
     payment_request: {
       method_data: [{ supported_methods: HSP_X402_METHOD, data: { x402Version: 2, network: "local", chain_id: 31337, contract_address: token as Hex, pay_to: POOL, coin: "USDC" } }],
-      details: { id: "PAY-REQ-01", display_items: [], total: { label: "Total", amount: { currency: "USD", value } } },
+      details: { id: requestId, display_items: [{ label: "Net settlement", amount: { currency: "USD", value } }], total: { label: "Total", amount: { currency: "USD", value } } },
     },
     cart_expiry: new Date(Date.now() + 3_600_000).toISOString(),
     merchant_name: "Kohaku",
@@ -82,7 +82,8 @@ async function payment(c: HspCartContents, o: { signer?: typeof payer; value?: b
 function open(gw: LocalHspGateway, c: HspCartContents) {
   const r = gw.createOrder({ cart_mandate: { contents: c, merchant_authorization: merchantAuthorization(c, "Kohaku", merchant) } });
   expect(r.code).toBe(0);
-  return (r.data as { flow_id: string }).flow_id;
+  // HSP answers with the checkout URL; the flow id is its last segment
+  return (r.data as { payment_url: string }).payment_url.split("/").at(-1)!;
 }
 
 describe("local HSP gateway", () => {
@@ -95,11 +96,29 @@ describe("local HSP gateway", () => {
     expect(gw.createOrder({ cart_mandate: { contents: cart(undefined, "9.99"), merchant_authorization: sig } }).code).not.toBe(0);
     expect(gw.createOrder({ cart_mandate: { contents: cart("X", "0.01", POOL), merchant_authorization: merchantAuthorization(cart("X", "0.01", POOL), "Kohaku", merchant) } }).code).not.toBe(0);
     const first = gw.createOrder({ cart_mandate: { contents: c, merchant_authorization: sig } });
-    expect(first.code).toBe(0);
-    // idempotent for the same cart, refused for a different cart under the same id
-    expect(gw.createOrder({ cart_mandate: { contents: c, merchant_authorization: sig } }).data).toEqual(first.data);
-    const other = cart(c.id, "0.02");
-    expect(gw.createOrder({ cart_mandate: { contents: other, merchant_authorization: merchantAuthorization(other, "Kohaku", merchant) } }).code).toBe(40901);
+    expect(first).toMatchObject({ code: 0, data: { payment_request_id: c.payment_request.details.id, multi_pay: false } });
+  });
+
+  it("checks the cart's amounts the way HSP does", () => {
+    const gw = gateway();
+    const c = cart();
+    c.payment_request.details.display_items = [{ label: "A", amount: { currency: "USD", value: "0.01" } }];
+    expect(gw.createOrder({ cart_mandate: { contents: c, merchant_authorization: merchantAuthorization(c, "Kohaku", merchant) } }).code).toBe(10001);
+    const eur = cart("KOHAKU-EUR");
+    eur.payment_request.details.total.amount.currency = "EUR";
+    expect(gw.createOrder({ cart_mandate: { contents: eur, merchant_authorization: merchantAuthorization(eur, "Kohaku", merchant) } }).code).toBe(10001);
+  });
+
+  it("never reuses a cart mandate id or a payment request id, as HSP does", () => {
+    const gw = gateway();
+    const c = cart();
+    open(gw, c);
+    const again = gw.createOrder({ cart_mandate: { contents: c, merchant_authorization: merchantAuthorization(c, "Kohaku", merchant) } });
+    expect(again.code).toBe(40001);
+    const sameRequest = cart("KOHAKU-31337-cf7ed3ac-E1-A1-R1", "0.0172", TOKEN, c.payment_request.details.id);
+    expect(gw.createOrder({ cart_mandate: { contents: sameRequest, merchant_authorization: merchantAuthorization(sameRequest, "Kohaku", merchant) } }).code).toBe(10004);
+    const retry = cart("KOHAKU-31337-cf7ed3ac-E1-A1-R1", "0.0172", TOKEN, `${c.payment_request.details.id}-R1`);
+    expect(gw.createOrder({ cart_mandate: { contents: retry, merchant_authorization: merchantAuthorization(retry, "Kohaku", merchant) } }).code).toBe(0);
   });
 
   it("refuses an authorization for a different amount than the cart", async () => {
@@ -126,13 +145,47 @@ describe("local HSP gateway", () => {
     expect(r.code).toBe(40104);
   });
 
-  it("reports payment status in HashKey Merchant's shape", () => {
+  it("reports payment records in HashKey Merchant's shape", () => {
     const gw = gateway();
     const c = cart();
-    open(gw, c);
+    const flow = open(gw, c);
     const r = gw.payments({ cart_mandate_id: c.id });
     expect(r.code).toBe(0);
-    expect((r.data as { status: string; cart_mandate_id: string }[])[0]).toMatchObject({ status: "payment-required", cart_mandate_id: c.id, amount: "17200" });
-    expect(gw.payments({}).code).not.toBe(0);
+    expect((r.data as object[])[0]).toMatchObject({
+      status: "payment-required",
+      content_id: c.id,
+      payment_request_id: c.payment_request.details.id,
+      flow_id: flow,
+      order_amount: "0.0172",
+      pay_amount: "0.0172",
+      usd_amount: "0.0172",
+      token: "USDC",
+      token_address: TOKEN,
+      to_pay_address: POOL,
+      chain: "eip155:31337",
+      network: "local",
+      extra_protocol: "eip3009",
+      gas_fee_advanced: true,
+    });
+    // by payment request id or flow id: one record, not a list
+    expect(gw.payments({ flow_id: flow }).data).toMatchObject({ content_id: c.id });
+    expect(gw.payments({ payment_request_id: c.payment_request.details.id }).data).toMatchObject({ flow_id: flow });
+    expect(gw.payments({ flow_id: "nope" }).code).toBe(10003);
+    expect(gw.payments({}).code).toBe(10001);
+  });
+
+  it("records the payer's line item and a failure HSP could not relay", async () => {
+    const gw = gateway();
+    const c = cart();
+    const flow = open(gw, c);
+    const pm = await payment(c);
+    // the chain is unreachable, so the relay's dry run fails
+    const r = await gw.payMandate({ flow_id: flow, payment_mandate: pm });
+    expect(r.code).toBe(40020);
+    expect(gw.payments({ flow_id: flow }).data).toMatchObject({
+      status: "payment-failed",
+      request_id: pm.payment_mandate_contents.payment_details_id,
+      payer_address: payer.address,
+    });
   });
 });

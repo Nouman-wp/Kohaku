@@ -40,6 +40,44 @@ export const HSP_CHAIN_NAMES: Record<ChainKey, string> = {
   hashkey: "hashkey",
 };
 
+/** HashKey Merchant hosts, as HashKey's HSP docs list them (hashkey-merchant.github.io). */
+export const HSP_BASE_URLS = {
+  /** testnet tokens */
+  qa: "https://merchant-qa.hashkeymerchant.com",
+  /** mainnet tokens */
+  staging: "https://merchant-stg.hashkeymerchant.com",
+  /** mainnet tokens */
+  production: "https://hsp.hashkey.com",
+} as const;
+
+/** The HashKey Merchant host a chain settles through unless HSP_BASE_URL says otherwise. */
+export const HSP_DEFAULT_BASE_URL: Partial<Record<ChainKey, string>> = {
+  "hashkey-testnet": HSP_BASE_URLS.qa,
+  hashkey: HSP_BASE_URLS.production,
+};
+
+export interface HspToken {
+  coin: string;
+  address: `0x${string}`;
+  decimals: number;
+  protocol: "eip3009" | "permit2";
+}
+
+/**
+ * The HashKey Chain tokens HashKey Merchant settles, from its onboarding table. Kohaku's
+ * debtors pay with EIP-3009 authorizations, so only USDC can settle; USDT there uses Permit2.
+ */
+export const HSP_TOKENS: Partial<Record<ChainKey, HspToken[]>> = {
+  "hashkey-testnet": [
+    { coin: "USDC", address: "0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6", decimals: 6, protocol: "eip3009" },
+    { coin: "USDT", address: "0x372325443233fEbaC1F6998aC750276468c83CC6", decimals: 6, protocol: "permit2" },
+  ],
+  hashkey: [
+    { coin: "USDC", address: "0x054ed45810DbBAb8B27668922D110669c9D88D0a", decimals: 6, protocol: "eip3009" },
+    { coin: "USDT", address: "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029", decimals: 6, protocol: "permit2" },
+  ],
+};
+
 export function chainKeyFromId(id: number): ChainKey {
   if (id === 177) return "hashkey";
   if (id === 133) return "hashkey-testnet";

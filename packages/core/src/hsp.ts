@@ -1,18 +1,19 @@
 import { encodeAbiParameters, keccak256, sha256, stringToHex, type Address, type Hex } from "viem";
 
 /**
- * HSP (HashKey Settlement Protocol) wire objects, as the HashKey Merchant API defines them
- * and as the HSP integrations published on GitHub use them (AP2 mandates over x402):
+ * HSP (HashKey Settlement Protocol) wire objects, as HashKey's HSP docs define them
+ * (https://hashkey-merchant.github.io) and as the HSP integrations on GitHub use them for the
+ * payer side, which those docs leave to HSP's checkout (AP2 mandates over x402):
  *
- *   1. the merchant (Kohaku's clearing service) opens an order: an AP2 **cart mandate** whose
- *      contents name the token, the payee (`pay_to`) and the total, signed by the merchant
- *      with an ES256K JWT that commits to `cart_hash` = sha256(canonical JSON of contents);
- *   2. the payer (the debtor agent) answers with an AP2 **payment mandate**: an x402 v2
- *      payload carrying an EIP-3009 `TransferWithAuthorization` signed by its own wallet,
- *      plus a `user_authorization` JWT binding both mandates' hashes;
- *   3. HSP verifies both, relays the authorization on chain (the payer needs no gas) and
- *      reports the payment's status (`payment-included` → `payment-successful`) by webhook
- *      and on its status endpoint.
+ *   1. the receiving side (Kohaku's clearing service, the merchant) states the payment
+ *      conditions as an AP2 **cart mandate**: token, payee (`pay_to`) and total, signed with
+ *      an ES256K JWT that commits to `cart_hash` = sha256(canonical JSON of contents);
+ *   2. the paying agent (the debtor) builds an AP2 **payment mandate** from those
+ *      conditions: an x402 v2 payload carrying an EIP-3009 `TransferWithAuthorization`
+ *      signed by its own wallet, plus a `user_authorization` JWT binding both mandates;
+ *   3. HSP's gateway verifies both, executes the transfer on chain (the payer needs no gas)
+ *      and reports it by webhook and on its status endpoint: `payment-included`, then
+ *      `payment-safe`, then `payment-finalized` (or `payment-failed`).
  *
  * Kohaku binds each payment to one epoch, one debtor and one exact amount by using the
  * settlement order reference as the EIP-3009 nonce: the token itself then refuses to move
@@ -28,9 +29,17 @@ export const HSP_X402_VERSION = 2;
 /** How long a signed transfer authorization stays valid, as in HSP's checkout. */
 export const HSP_AUTHORIZATION_TTL_SECONDS = 300;
 
-export const HSP_SUCCESS_STATUSES = ["payment-successful", "payment-safe", "payment-finalized"] as const;
-export const HSP_PENDING_STATUSES = ["payment-required", "payment-submitted", "payment-included"] as const;
+/**
+ * HSP's payment state machine: required → submitted → verified → processing → included →
+ * safe → finalized, or failed. Kohaku counts a payment from `payment-safe` (the confirmation
+ * depth HSP calls safe from reorgs) and checks the chain itself as well. `payment-successful`
+ * is what earlier gateway builds reported; it is still read as success.
+ */
+export const HSP_SUCCESS_STATUSES = ["payment-safe", "payment-finalized", "payment-successful"] as const;
+export const HSP_PENDING_STATUSES = ["payment-required", "payment-submitted", "payment-verified", "payment-processing", "payment-included"] as const;
 export const HSP_FAILED_STATUSES = ["payment-failed"] as const;
+/** The statuses HSP sends a webhook for. */
+export const HSP_WEBHOOK_STATUSES = ["payment-included", "payment-safe", "payment-finalized", "payment-failed"] as const;
 
 export type HspPaymentStatus = (typeof HSP_SUCCESS_STATUSES)[number] | (typeof HSP_PENDING_STATUSES)[number] | (typeof HSP_FAILED_STATUSES)[number];
 
@@ -193,24 +202,65 @@ export interface HspPaymentMandate {
   user_authorization: string;
 }
 
-/** One row of HSP's payment status (`GET /api/v1/merchant/payments`, and the webhook body). */
+/**
+ * One payment record from `GET /api/v1/merchant/payments` (HSP's PaymentItemResponse).
+ * Amounts are token-denominated decimal strings. The trailing fields are the names earlier
+ * gateway builds used; the helpers below read either.
+ */
 export interface HspPaymentRecord {
+  /** cart_mandate.contents.id (ID1) */
+  content_id?: string;
   payment_request_id: string;
-  cart_mandate_id: string;
+  /** the payer's line-item id (ID5); HSP's checkout makes it as in hspPaymentDetailsId */
+  request_id?: string;
   flow_id?: string;
-  payment_details_id?: string;
-  status: string;
-  status_reason?: string | null;
-  amount?: string;
+  app_key?: string;
+  product_amount?: string;
+  order_amount?: string;
+  pay_amount?: string;
+  usd_product_amount?: string;
+  usd_additional_amount?: string;
+  usd_amount?: string;
+  usd_amount_rate?: string;
+  usd_pay_amount?: string;
   token?: string;
   token_address?: string;
-  chain_id?: number;
   payer_address?: string;
-  pay_to?: string;
+  to_pay_address?: string;
+  /** CAIP-2, e.g. eip155:133 */
+  chain?: string;
+  network?: string;
+  extra_protocol?: string;
+  base_fee?: string;
+  network_fee?: string;
+  gas_fee?: string;
+  gas_fee_amount?: string;
+  gas_fee_advanced?: boolean;
+  gas_limit?: number;
+  status: string;
+  status_reason?: string | null;
   tx_signature?: string | null;
-  payment_url?: string;
+  deadline_time?: string;
   created_at?: string;
   updated_at?: string;
+  broadcast_at?: string | null;
+  included_at?: string | null;
+  completed_at?: string | null;
+  cart_mandate_id?: string;
+  payment_details_id?: string;
+  amount?: string;
+  pay_to?: string;
+  chain_id?: number;
+}
+
+/** The order (cart mandate id) a payment record belongs to. */
+export function hspRecordCartId(r: HspPaymentRecord): string | undefined {
+  return r.content_id ?? r.cart_mandate_id;
+}
+
+/** The payer's line-item id on a payment record. */
+export function hspRecordRequestId(r: HspPaymentRecord): string | undefined {
+  return r.request_id ?? r.payment_details_id;
 }
 
 /** HSP's payment_details_id: YYYYMMDDHHmmss (UTC) + 6 random digits, as its checkout makes it. */
@@ -242,9 +292,13 @@ export function hspCartMandateId(chainId: number, clearingHouse: Address, epoch:
   return `KOHAKU-${chainId}-${clearingHouse.slice(2, 10).toLowerCase()}-E${epoch}-A${agentId}`;
 }
 
-/** HSP payment request id: the order reference itself, so it is recoverable from either side. */
-export function hspPaymentRequestId(orderRef: Hex): string {
-  return `PAY-REQ-${orderRef.slice(2)}`;
+/**
+ * HSP payment request id: the order reference itself, so it is recoverable from either side.
+ * HSP refuses a payment_request_id it has seen before (10004), so a re-opened order gets the
+ * same `-R<attempt>` suffix as its cart mandate id.
+ */
+export function hspPaymentRequestId(orderRef: Hex, attempt = 0): string {
+  return `PAY-REQ-${orderRef.slice(2)}${attempt > 0 ? `-R${attempt}` : ""}`;
 }
 
 export interface SettlementOrder {

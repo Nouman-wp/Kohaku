@@ -4,7 +4,7 @@ import type { Db } from "./db.ts";
 import type { Chain } from "./chain.ts";
 import { abis } from "./chain.ts";
 import type { Registry } from "./registry.ts";
-import type { HspOrder, HspPort } from "./hsp/port.ts";
+import { HspOrderIdTaken, type HspOrder, type HspPort } from "./hsp/port.ts";
 import { bus, log } from "./bus.ts";
 import { epochView, payoutView, settlementView, type EpochRow, type PayoutRow, type SettlementRow } from "./views.ts";
 
@@ -81,7 +81,9 @@ export class Settlements {
         log("info", "hsp", `${row.id}: HSP order ${o.cartMandateId} opened for ${row.amount} (flow ${o.flowId ?? "?"})`);
         this.emit(row.id);
       } catch (err) {
-        this.db.run("UPDATE settlements SET error = ?, updated_at = ? WHERE id = ?", `opening HSP order: ${(err as Error).message}`, Date.now(), row.id);
+        // ids HSP has already seen are never accepted again: the next pass opens the next attempt
+        const bump = err instanceof HspOrderIdTaken ? 1 : 0;
+        this.db.run("UPDATE settlements SET hsp_attempt = hsp_attempt + ?, error = ?, updated_at = ? WHERE id = ?", bump, `opening HSP order: ${(err as Error).message}`, Date.now(), row.id);
       } finally {
         this.opening.delete(row.id);
       }
@@ -189,6 +191,10 @@ export class Settlements {
 
   byCartMandateId(cartMandateId: string): SettlementRow | undefined {
     return this.db.get<SettlementRow>("SELECT * FROM settlements WHERE hsp_cart_id = ?", cartMandateId);
+  }
+
+  byPaymentRequestId(paymentRequestId: string): SettlementRow | undefined {
+    return this.db.get<SettlementRow>("SELECT * FROM settlements WHERE hsp_payment_id = ?", paymentRequestId);
   }
 
   /** Idempotent: moves a settlement as far forward as it can go right now. */

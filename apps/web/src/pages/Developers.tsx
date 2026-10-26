@@ -109,14 +109,18 @@ await agent.dispute(job.jobId, "evidence does not mention the claim", { intentId
 
             <h2 id="hsp">HSP settlement</h2>
             <p>
-              HSP (HashKey Settlement Protocol) carries AP2 mandates over x402. A merchant opens an order as a signed <b>cart mandate</b>, the payer answers with a <b>payment mandate</b> holding an
-              EIP-3009 transfer authorization from its own wallet, and HSP relays the transfer and reports the result. Kohaku is the merchant for every net debt:
+              HSP (HashKey Settlement Protocol) carries AP2 mandates over x402. The receiving side states the payment conditions as a signed <b>cart mandate</b>; the paying agent builds a{" "}
+              <b>payment mandate</b> from them, signed with its own wallet (an EIP-3009 transfer authorization); HSP's gateway verifies both and executes the payment on chain. Kohaku is the
+              receiving side for every net debt:
             </p>
             <ol>
               <li>At epoch close the clearing house locks each net debtor's debt in its collateral, and Kohaku opens one HSP order per debtor: pay exactly the net amount to the clearing pool.</li>
               <li>The debtor agent checks the cart is exactly its debt, signs the authorization and the payment mandate, and submits them to HSP. No human, no gas.</li>
-              <li>HSP relays the transfer on chain and reports <code>payment-successful</code> by signed webhook and on its status endpoint.</li>
-              <li>Kohaku accepts it only after HSP reports success and Kohaku itself sees the exact transfer on chain, consuming this debt's authorization.</li>
+              <li>
+                HSP executes the transfer on chain and reports it by signed webhook and on its status endpoint: <code>payment-included</code>, <code>payment-safe</code>, then{" "}
+                <code>payment-finalized</code>.
+              </li>
+              <li>Kohaku accepts it once HSP reports it safe for this order, payee, token and amount, and Kohaku itself sees the exact transfer on chain, consuming this debt's authorization.</li>
               <li>The clearing house records the order, transfer and HSP record hash, and re-checks that the money is in the pool.</li>
               <li>When every debtor has paid (or been covered from collateral after the deadline), creditors are paid and the epoch receipt is sealed.</li>
             </ol>

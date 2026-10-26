@@ -3,7 +3,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { concat, keccak256, stringToHex, type Hex } from "viem";
-import type { ChainKey, Deployment, HspMode } from "@kohaku/core";
+import { HSP_BASE_URLS, HSP_DEFAULT_BASE_URL, HSP_TOKENS, type ChainKey, type Deployment, type HspMode } from "@kohaku/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, "../../..");
@@ -95,13 +95,11 @@ export function loadConfig(): Config {
   const chain = env.KOHAKU_CHAIN as ChainKey;
   const deployment = loadDeployment(chain);
   const defaultRpc = chain === "hashkey" ? "https://mainnet.hsk.xyz" : chain === "hashkey-testnet" ? "https://testnet.hsk.xyz" : "http://127.0.0.1:8545";
-  if (env.HSP_MODE === "merchant") {
-    const missing = (["HSP_BASE_URL", "HSP_APP_KEY", "HSP_APP_SECRET", "HSP_MERCHANT_PRIVATE_KEY"] as const).filter((k) => !env[k]);
-    if (missing.length) throw new Error(`HSP_MODE=merchant needs ${missing.join(", ")} (from HashKey Merchant onboarding)`);
-    if (deployment.mockToken) throw new Error("HSP_MODE=merchant settles in a token HashKey supports; this deployment uses the test token. Redeploy with SETTLEMENT_TOKEN set.");
-  }
+  const hspBaseUrl = (env.HSP_BASE_URL || (env.HSP_MODE === "merchant" ? HSP_DEFAULT_BASE_URL[chain] : undefined))?.replace(/\/+$/, "");
+  if (env.HSP_MODE === "merchant") checkMerchantSetup(env, chain, deployment, hspBaseUrl);
   return {
     ...env,
+    HSP_BASE_URL: hspBaseUrl,
     chain,
     rpcUrl: env.RPC_URL ?? defaultRpc,
     deployment,
@@ -112,6 +110,23 @@ export function loadConfig(): Config {
     hspRelayerKey: (env.HSP_GATEWAY_RELAYER_KEY ?? derived(env.CLEARER_PRIVATE_KEY, "hsp-gateway-relayer")) as Hex,
     extendIdleEpochs: env.EPOCH_EXTEND_IDLE ? env.EPOCH_EXTEND_IDLE === "true" : chain !== "local",
   };
+}
+
+/** HSP_MODE=merchant against HashKey: credentials present, the right host for the chain, and a token HashKey settles by EIP-3009. */
+function checkMerchantSetup(env: z.infer<typeof schema>, chain: ChainKey, deployment: Deployment, baseUrl: string | undefined): void {
+  const missing = [...(baseUrl ? [] : ["HSP_BASE_URL"]), ...(["HSP_APP_KEY", "HSP_APP_SECRET", "HSP_MERCHANT_PRIVATE_KEY"] as const).filter((k) => !env[k])];
+  if (missing.length) throw new Error(`HSP_MODE=merchant needs ${missing.join(", ")} (from HashKey Merchant onboarding)`);
+  if (deployment.mockToken) throw new Error("HSP_MODE=merchant settles in a token HashKey supports; this deployment uses the test token. Redeploy with SETTLEMENT_TOKEN set.");
+  // HashKey's QA host serves testnet tokens; staging and production serve mainnet tokens only
+  const mainnetHost = baseUrl === HSP_BASE_URLS.staging || baseUrl === HSP_BASE_URLS.production;
+  if (chain === "hashkey" && baseUrl === HSP_BASE_URLS.qa) throw new Error(`HSP_BASE_URL ${baseUrl} is HashKey's testnet (QA) host; mainnet uses ${HSP_BASE_URLS.production}`);
+  if (chain === "hashkey-testnet" && mainnetHost) throw new Error(`HSP_BASE_URL ${baseUrl} serves mainnet tokens only; testnet uses ${HSP_BASE_URLS.qa}`);
+  const tokens = HSP_TOKENS[chain];
+  if (!tokens) return;
+  const t = tokens.find((x) => x.address.toLowerCase() === deployment.token.toLowerCase());
+  const usable = tokens.filter((x) => x.protocol === "eip3009").map((x) => `${x.coin} ${x.address}`).join(", ");
+  if (!t || t.protocol !== "eip3009") throw new Error(`HSP_MODE=merchant: settlement token ${deployment.token} is not one HashKey Merchant settles by EIP-3009 on ${chain} (${usable})`);
+  if (env.HSP_COIN !== t.coin) throw new Error(`HSP_COIN=${env.HSP_COIN}, but HashKey Merchant lists ${deployment.token} as ${t.coin}`);
 }
 
 /** This deployment's ledger: names its SQLite file and tags its rows in the Supabase mirror. */

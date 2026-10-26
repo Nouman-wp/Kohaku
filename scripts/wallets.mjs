@@ -64,11 +64,11 @@ CORS_ORIGIN=*
 
 # ── HSP ──────────────────────────────────────────────────────────────────────
 # local:    Kohaku's own gateway serves HashKey Merchant's API and relays the payments.
-# merchant: HashKey Merchant itself. Needs HSP_BASE_URL, HSP_APP_KEY, HSP_APP_SECRET from
+# merchant: HashKey Merchant itself. Needs HSP_APP_KEY, HSP_APP_SECRET from
 #           HashKey, the merchant public key (pnpm wallets ${network} --show) registered with
 #           them, and a SETTLEMENT_TOKEN they support.
 HSP_MODE=local
-${testnet ? "# HashKey Merchant QA (testnet): https://merchant-qa.hashkeymerchant.com" : "# HashKey Merchant production URL: from HashKey at onboarding"}
+${testnet ? "# empty = HashKey Merchant QA, https://merchant-qa.hashkeymerchant.com" : "# empty = HashKey Merchant production, https://hsp.hashkey.com (staging: https://merchant-stg.hashkeymerchant.com)"}
 HSP_BASE_URL=
 HSP_APP_KEY=kohaku-local-gateway
 HSP_APP_SECRET=

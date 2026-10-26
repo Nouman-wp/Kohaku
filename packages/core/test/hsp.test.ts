@@ -7,6 +7,9 @@ import {
   hspCanonical,
   hspHash,
   hspPaymentDetailsId,
+  hspPaymentRequestId,
+  hspRecordCartId,
+  hspRecordRequestId,
   hspStatusClass,
   unitsToDecimal,
   type HspCartContents,
@@ -62,11 +65,28 @@ describe("HSP canonical hashing", () => {
     const p = { x402Version: 2, payload: { signature: "0x01" }, accepted: { scheme: "exact" } } as never;
     expect(decodeX402(encodeX402(p))).toEqual(p);
   });
-  it("classifies HSP statuses", () => {
-    expect(hspStatusClass("payment-successful")).toBe("success");
-    expect(hspStatusClass("payment-included")).toBe("pending");
+  it("classifies HSP statuses as HashKey's state machine defines them", () => {
+    for (const s of ["payment-required", "payment-submitted", "payment-verified", "payment-processing", "payment-included"]) expect(hspStatusClass(s)).toBe("pending");
+    expect(hspStatusClass("payment-safe")).toBe("success");
+    expect(hspStatusClass("payment-finalized")).toBe("success");
+    expect(hspStatusClass("payment-successful")).toBe("success"); // earlier gateway builds
     expect(hspStatusClass("payment-failed")).toBe("failed");
+    expect(hspStatusClass("payment-refunded")).toBe("unknown");
     expect(hspPaymentDetailsId(new Date(Date.UTC(2026, 9, 25, 1, 2, 3)), 7)).toBe("20261025010203000007");
+  });
+});
+
+describe("HSP ids and records", () => {
+  it("gives a re-opened order a fresh payment request id", () => {
+    const ref = ("0x" + "ab".repeat(32)) as `0x${string}`;
+    expect(hspPaymentRequestId(ref)).toBe(`PAY-REQ-${"ab".repeat(32)}`);
+    expect(hspPaymentRequestId(ref, 2)).toBe(`PAY-REQ-${"ab".repeat(32)}-R2`);
+  });
+  it("reads HashKey's record fields and the older names", () => {
+    expect(hspRecordCartId({ payment_request_id: "P", status: "payment-safe", content_id: "C1" })).toBe("C1");
+    expect(hspRecordCartId({ payment_request_id: "P", status: "payment-safe", cart_mandate_id: "C2" })).toBe("C2");
+    expect(hspRecordRequestId({ payment_request_id: "P", status: "payment-safe", request_id: "R1" })).toBe("R1");
+    expect(hspRecordRequestId({ payment_request_id: "P", status: "payment-safe", payment_details_id: "R2" })).toBe("R2");
   });
 });
 

@@ -22,11 +22,17 @@ export interface OpenedOrder {
   request: unknown;
 }
 
+/**
+ * HSP already has an order with this id (a response that never arrived, most likely). Ids
+ * cannot be reused, so the order is opened again under the next attempt's ids.
+ */
+export class HspOrderIdTaken extends Error {}
+
 export type HspOutcome = "ACCEPT" | "RETRYABLE" | "POLICY" | "PERMANENT";
 
 export interface HspVerification {
   outcome: HspOutcome;
-  /** HSP payment status as reported (payment-included, payment-successful, ...). */
+  /** HSP payment status as reported (payment-included, payment-safe, ...). */
   status: string;
   paymentId: string | null;
   txHash: Hex | null;
@@ -50,7 +56,7 @@ export interface HspPort {
   readonly mode: HspMode;
   info(): HspInfo;
   health(): Promise<boolean>;
-  /** Open the HSP order (AP2 cart mandate) a debtor pays. Throws if HSP refuses or is down. */
+  /** Open the HSP order (AP2 cart mandate) a debtor pays. Throws if HSP refuses or is down (HspOrderIdTaken if the ids are used). */
   open(order: HspOrder): Promise<OpenedOrder>;
   /** Is the debtor's payment of `order` settled, exactly, on chain? Never throws. */
   verify(order: HspOrder, cartMandateId: string, report: PaymentReport | null): Promise<HspVerification>;

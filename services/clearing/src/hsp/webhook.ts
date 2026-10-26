@@ -12,14 +12,16 @@ export interface WebhookEvent {
   txHash?: string;
 }
 
-export type WebhookResult = { ok: true; duplicate: boolean; event: WebhookEvent } | { ok: false; status: 400 | 401; reason: string };
+export type WebhookResult = { ok: true; duplicate: boolean; ignored: boolean; event: WebhookEvent } | { ok: false; status: 400 | 401; reason: string };
 
 /**
  * HSP webhook intake, in HashKey Merchant's format: `X-Signature: t=<unix>,v1=<hex>` where
  * v1 = HMAC-SHA256(app secret, `${t}.${rawBody}`). Authenticated, fresh (within five
- * minutes) and processed exactly once (event ids are recorded before anything acts on
- * them; a replay is acknowledged and ignored). The webhook only *triggers* verification:
- * the settlement is still checked against HSP's status endpoint and the chain.
+ * minutes) and processed exactly once. HSP calls once per status (included, safe,
+ * finalized, failed) with the same `request_id`, and retries each call up to six times, so
+ * an event is a (request_id, status) pair: recorded before anything acts on it, a replay is
+ * acknowledged and ignored. The webhook only *triggers* verification: the settlement is
+ * still checked against HSP's status endpoint and the chain.
  */
 export function acceptWebhook(
   db: Db,
@@ -44,7 +46,11 @@ export function acceptWebhook(
   const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : undefined);
   const status = str("status");
   if (!status || (!str("cart_mandate_id") && !str("payment_request_id"))) return { ok: false, status: 400, reason: "status and an order id are required" };
-  const id = str("request_id") ?? str("event_id") ?? `${str("payment_request_id") ?? str("cart_mandate_id")}:${status}`;
+  const id = `${str("request_id") ?? str("payment_request_id") ?? str("cart_mandate_id")}:${status}`;
+  const event = { id, status, cartMandateId: str("cart_mandate_id"), paymentRequestId: str("payment_request_id"), txHash: str("tx_signature") };
+  // HSP's only event type is "payment"; anything else is acknowledged and left alone
+  const type = str("event_type");
+  if (type && type !== "payment") return { ok: true, duplicate: false, ignored: true, event };
 
   const inserted = db.run(
     "INSERT INTO webhook_events(id, received_at, type, payload) VALUES (?,?,?,?) ON CONFLICT(id) DO NOTHING",
@@ -53,9 +59,5 @@ export function acceptWebhook(
     status,
     rawBody,
   );
-  return {
-    ok: true,
-    duplicate: Number(inserted.changes) === 0,
-    event: { id, status, cartMandateId: str("cart_mandate_id"), paymentRequestId: str("payment_request_id"), txHash: str("tx_signature") },
-  };
+  return { ok: true, duplicate: Number(inserted.changes) === 0, ignored: false, event };
 }

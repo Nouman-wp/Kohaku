@@ -506,8 +506,9 @@ export async function buildApi(ctx: Ctx): Promise<FastifyInstance> {
       log("warn", "hsp", `webhook rejected: ${r.reason}`);
       return reply.status(r.status).send({ code: r.status, msg: r.reason });
     }
-    if (r.duplicate) return { code: 0, duplicate: true };
-    const s = r.event.cartMandateId ? settlements.byCartMandateId(r.event.cartMandateId) : undefined;
+    if (r.duplicate || r.ignored) return { code: 0 };
+    const { cartMandateId, paymentRequestId } = r.event;
+    const s = (cartMandateId && settlements.byCartMandateId(cartMandateId)) || (paymentRequestId && settlements.byPaymentRequestId(paymentRequestId)) || undefined;
     if (s) void settlements.onHspEvent(s.hsp_cart_id!);
     return { code: 0 };
   });

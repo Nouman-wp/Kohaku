@@ -156,22 +156,38 @@ writes every epoch, which keeps it awake.
 
 ## 6. Switching HSP to HashKey Merchant
 
-When HashKey has onboarded the merchant (app key, app secret, merchant public key registered, test
-USDC in the agents' wallets):
+HashKey's HSP docs are at <https://hashkey-merchant.github.io>. Onboarding ("Merchant onboarding")
+asks for these, sent to HashKey's operations team:
+
+| Field | Kohaku |
+|---|---|
+| `organization_name` | Kohaku |
+| `email` | the admin email that receives the invite |
+| `description` | Clearing house for agent-to-agent payments on HashKey Chain |
+| `default_language` | `en` |
+| `service_rate` | `0.0000` |
+| `public_key` | the PEM printed by `node scripts/wallets.mjs testnet --show` (`mainnet --show` for production) |
+| `supported_chain_tokens` | `hashkey-testnet`, 133, USDC `0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6`, EIP-3009 (production: `hashkey`, 177, USDC `0x054ed45810DbBAb8B27668922D110669c9D88D0a`, EIP-3009) |
+
+After the invite email, create an application in the merchant console. It gives the `app_key` and
+`app_secret`. In **My Account → edit the app**, set the **Payment webhook URL** (HTTPS only) to
+`https://<backend>/v1/hsp/webhook`. Then, with HSP test USDC in the agents' wallets:
 
 ```ini
 SETTLEMENT_TOKEN=0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6     # testnet USDC that HSP supports
 HSP_MODE=merchant
-HSP_BASE_URL=https://merchant-qa.hashkeymerchant.com
-HSP_APP_KEY=<from HashKey>
-HSP_APP_SECRET=<from HashKey>
+HSP_APP_KEY=<from the merchant console>
+HSP_APP_SECRET=<from the merchant console>
+# HSP_BASE_URL defaults to https://merchant-qa.hashkeymerchant.com on testnet and
+# https://hsp.hashkey.com on mainnet (staging: https://merchant-stg.hashkeymerchant.com)
 ```
 
-Redeploy (the token is fixed per deployment), fund the agents' wallets with that USDC, set the
-webhook URL in the HashKey Merchant console to `https://<site>/v1/hsp/webhook`, and restart. The
-clearing service and the agents run the same code: orders go to HashKey, debtors pay through
-HashKey's `pay-mandate`, and HashKey relays the transfers. The website shows "HashKey Merchant"
-instead of "HSP local gateway".
+Redeploy (the token is fixed per deployment), fund the agents' wallets with that USDC and restart.
+The service refuses to start if the host serves the other network's tokens, or if the token is not
+one HSP settles by EIP-3009 (USDT on HashKey Chain uses Permit2). The clearing service and the agents
+run the same code: orders go to HashKey, debtors pay through HashKey's `pay-mandate`, HashKey
+relays the transfers, and Kohaku counts a payment once HashKey reports it `payment-safe` and the
+transfer checks out on chain. The website shows "HashKey Merchant" instead of "HSP local gateway".
 
 ## 7. Mainnet (chain 177)
 

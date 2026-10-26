@@ -17,13 +17,21 @@ function headers(body: string, ts?: number, secret = SECRET) {
 }
 
 describe("HSP webhooks (HashKey Merchant format)", () => {
-  const body = JSON.stringify({
-    request_id: "evt_1",
-    cart_mandate_id: "KOHAKU-133-abcd1234-E7-A3",
+  // the fields of HashKey's webhook sample that Kohaku reads
+  const payload = {
+    event_type: "payment",
     payment_request_id: "PAY-REQ-01",
-    status: "payment-successful",
+    request_id: "20261025010203000007",
+    cart_mandate_id: "KOHAKU-133-abcd1234-E7-A3",
+    amount: "0.0172",
+    order_amount: "0.0172",
+    token: "USDC",
+    chain: "eip155:133",
+    network: "hashkey-testnet",
+    status: "payment-safe",
     tx_signature: "0x" + "ab".repeat(32),
-  });
+  };
+  const body = JSON.stringify(payload);
 
   it("accepts an authentic, fresh webhook once", () => {
     const db = fresh();
@@ -41,7 +49,7 @@ describe("HSP webhooks (HashKey Merchant format)", () => {
 
   it("rejects a tampered body", () => {
     const h = headers(body);
-    const r = acceptWebhook(fresh(), SECRET, h, body.replace("payment-successful", "payment-failed"));
+    const r = acceptWebhook(fresh(), SECRET, h, body.replace("payment-safe", "payment-failed"));
     expect(r.ok).toBe(false);
   });
 
@@ -54,8 +62,23 @@ describe("HSP webhooks (HashKey Merchant format)", () => {
 
   it("rejects missing headers and bodies without an order id", () => {
     expect(acceptWebhook(fresh(), SECRET, {}, body).ok).toBe(false);
-    const noId = JSON.stringify({ status: "payment-successful" });
+    const noId = JSON.stringify({ status: "payment-safe" });
     expect(acceptWebhook(fresh(), SECRET, headers(noId), noId).ok).toBe(false);
+  });
+
+  it("treats each status of one payment as its own event", () => {
+    const db = fresh();
+    const seen = ["payment-included", "payment-safe", "payment-finalized"].map((status) => {
+      const b = JSON.stringify({ ...payload, status });
+      return acceptWebhook(db, SECRET, headers(b), b);
+    });
+    expect(seen.map((r) => r.ok && !r.duplicate)).toEqual([true, true, true]);
+    expect(seen.map((r) => r.ok && r.event.id)).toEqual(["20261025010203000007:payment-included", "20261025010203000007:payment-safe", "20261025010203000007:payment-finalized"]);
+  });
+
+  it("acknowledges and ignores events that are not payments", () => {
+    const b = JSON.stringify({ ...payload, event_type: "refund" });
+    expect(acceptWebhook(fresh(), SECRET, headers(b), b)).toMatchObject({ ok: true, ignored: true });
   });
 
   it("derives a stable event id when HSP sends none", () => {

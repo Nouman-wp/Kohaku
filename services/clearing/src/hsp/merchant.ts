@@ -1,11 +1,14 @@
 import type { KeyObject } from "node:crypto";
-import { keccak256, stringToHex, type Hex, type PublicClient } from "viem";
+import { isAddressEqual, keccak256, stringToHex, type Address, type Hex, type PublicClient } from "viem";
 import {
   HSP_X402_METHOD,
   HSP_X402_VERSION,
+  decimalToUnits,
   hspCanonical,
   hspCartMandateId,
   hspPaymentRequestId,
+  hspRecordCartId,
+  hspRecordRequestId,
   hspStatusClass,
   unitsToDecimal,
   type HspCartContents,
@@ -15,7 +18,10 @@ import {
 } from "@kohaku/core";
 import { hspRequestHeaders, merchantAuthorization } from "@kohaku/core/hsp-node";
 import { checkTransfer } from "./onchain.ts";
-import type { HspInfo, HspOrder, HspPort, HspVerification, OpenedOrder } from "./port.ts";
+import { HspOrderIdTaken, type HspInfo, type HspOrder, type HspPort, type HspVerification, type OpenedOrder } from "./port.ts";
+
+/** HSP error codes for an id it has already seen: cart mandate id (40001), payment request id (10004). */
+const ID_TAKEN = new Set([40001, 10004]);
 
 export interface MerchantCredentials {
   /** API base, e.g. https://merchant-qa.hashkeymerchant.com (HashKey) or <clearing>/hsp (local gateway) */
@@ -37,9 +43,9 @@ export class HspApiError extends Error {
 }
 
 /**
- * Client for the HashKey Merchant API, the HSP merchant surface the HSP integrations on
- * GitHub build against. Every call is HMAC-signed (X-App-Key / X-Timestamp / X-Nonce /
- * X-Signature); bodies are sent as canonical JSON so the signed body hash is unambiguous.
+ * Client for the HashKey Merchant API (https://hashkey-merchant.github.io), HSP's merchant
+ * surface. Every call is HMAC-signed (X-App-Key / X-Timestamp / X-Nonce / X-Signature over
+ * sha256 of the canonical JSON body); bodies are sent as that same canonical JSON.
  */
 export class HspMerchantClient {
   lastOkAt = 0;
@@ -81,7 +87,7 @@ export class HspMerchantClient {
   }
 
   createOrder(cartMandate: { contents: HspCartContents; merchant_authorization: string }, redirectUrl?: string) {
-    return this.request<{ payment_url?: string; flow_id?: string; payment_request_id?: string; cart_mandate_id?: string }>("POST", "/api/v1/merchant/orders", {
+    return this.request<{ payment_url?: string; payment_request_id?: string; multi_pay?: boolean; flow_id?: string }>("POST", "/api/v1/merchant/orders", {
       body: { cart_mandate: cartMandate, ...(redirectUrl ? { redirect_url: redirectUrl } : {}) },
     });
   }
@@ -120,8 +126,9 @@ export interface MerchantHspOptions {
  * Kohaku's HSP port. The clearing service is the HSP merchant: for every net debt it opens a
  * cart mandate naming the clearing pool as `pay_to` and the exact net amount as the total.
  * The debtor agent pays it with an EIP-3009 authorization (nonce = settlement order ref)
- * that HSP relays. A settlement is accepted only when HSP reports the payment successful
- * *and* Kohaku sees, on chain, that exact transfer consuming that exact authorization.
+ * that HSP relays. A settlement is accepted only when HSP reports the payment safe (or
+ * final) for this order, payee, token and amount, *and* Kohaku sees, on chain, that exact
+ * transfer consuming that exact authorization.
  *
  * In `merchant` mode this talks to HashKey's Merchant API. In `local` mode it talks to
  * Kohaku's own gateway (./gateway.ts), which serves the same endpoints; nothing here
@@ -186,10 +193,17 @@ export class MerchantHsp implements HspPort {
   async open(order: HspOrder): Promise<OpenedOrder> {
     const base = hspCartMandateId(this.o.chainId, order.payTo, order.epoch, order.agentId);
     const cartMandateId = order.attempt > 0 ? `${base}-R${order.attempt}` : base;
-    const paymentRequestId = hspPaymentRequestId(order.orderRef);
+    const paymentRequestId = hspPaymentRequestId(order.orderRef, order.attempt);
     const contents = this.cartContents(order, cartMandateId, paymentRequestId);
     const cartMandate = { contents, merchant_authorization: merchantAuthorization(contents, this.api.creds.merchantName, this.api.creds.merchantKey) };
-    const data = await this.api.createOrder(cartMandate, this.o.redirectUrl);
+    let data;
+    try {
+      data = await this.api.createOrder(cartMandate, this.o.redirectUrl);
+    } catch (err) {
+      const code = (err as HspApiError).code;
+      if (code !== undefined && ID_TAKEN.has(code)) throw new HspOrderIdTaken(`HSP already has order ${cartMandateId}: ${(err as Error).message}`);
+      throw err;
+    }
     return {
       cartMandateId,
       paymentRequestId: data.payment_request_id ?? paymentRequestId,
@@ -210,7 +224,7 @@ export class MerchantHsp implements HspPort {
     }
     // newest first; prefer the attempt the debtor reported
     const rec =
-      records.find((r) => report?.paymentDetailsId && r.payment_details_id === report.paymentDetailsId) ??
+      records.find((r) => report?.paymentDetailsId && hspRecordRequestId(r) === report.paymentDetailsId) ??
       records.find((r) => hspStatusClass(r.status) === "success") ??
       records[0];
     if (!rec) return { ...none, outcome: "RETRYABLE", status: "payment-required", reason: "HSP has no payment for this order yet" };
@@ -219,12 +233,40 @@ export class MerchantHsp implements HspPort {
     if (cls === "pending" || cls === "unknown") return { ...base, outcome: "RETRYABLE", status: rec.status, reason: `HSP status ${rec.status}` };
     if (cls === "failed") return { ...base, outcome: "PERMANENT", status: rec.status, reason: rec.status_reason ?? "HSP reported the payment failed" };
 
-    // HSP says successful. Bind it to this debt, then check the chain ourselves.
-    if (rec.cart_mandate_id && rec.cart_mandate_id !== cartMandateId) return { ...base, outcome: "POLICY", status: rec.status, reason: "HSP record is for another order" };
+    // HSP says safe. Bind its record to this debt, then check the chain ourselves.
+    const mismatch = this.recordMismatch(rec, order, cartMandateId);
+    if (mismatch) return { ...base, outcome: "POLICY", status: rec.status, reason: mismatch };
     const tx = rec.tx_signature as Hex | undefined;
     if (!tx || !/^0x[0-9a-fA-F]{64}$/.test(tx)) return { ...base, outcome: "RETRYABLE", status: rec.status, reason: "HSP has not returned the settlement transaction yet" };
     const t = await checkTransfer(this.client, tx, order.token, order.payer, order.payTo, order.amount, order.orderRef);
     if (!t.ok) return { ...base, outcome: t.retryable ? "RETRYABLE" : "POLICY", status: rec.status, reason: t.reason };
     return { ...base, outcome: "ACCEPT", status: rec.status, txHash: tx, receiptHash: keccak256(stringToHex(hspCanonical(rec))) };
+  }
+
+  /** HSP's own record must describe this debt: order, payee, token and order amount. Fields it leaves out are not held against it. */
+  private recordMismatch(rec: HspPaymentRecord, order: HspOrder, cartMandateId: string): string | null {
+    const cartId = hspRecordCartId(rec);
+    if (cartId && cartId !== cartMandateId) return "HSP record is for another order";
+    const payee = rec.to_pay_address ?? rec.pay_to;
+    if (payee && !sameAddress(payee, order.payTo)) return `HSP paid ${payee}, not the clearing pool`;
+    if (rec.token_address && !sameAddress(rec.token_address, order.token)) return `HSP settled in ${rec.token_address}, not the settlement token`;
+    if (rec.order_amount) {
+      let units: bigint | null;
+      try {
+        units = decimalToUnits(rec.order_amount, this.o.decimals);
+      } catch {
+        units = null;
+      }
+      if (units !== order.amount) return `HSP order amount ${rec.order_amount} is not the debt ${unitsToDecimal(order.amount, this.o.decimals)}`;
+    }
+    return null;
+  }
+}
+
+function sameAddress(a: string, b: Address): boolean {
+  try {
+    return isAddressEqual(a as Address, b);
+  } catch {
+    return false;
   }
 }

@@ -57,7 +57,7 @@ flowchart LR
   A -- "verdicts" --> VR[(ERC-8004 Validation)]
   C -- "HSP order per net debt<br/>(AP2 cart mandate)" --> HSP{{HSP}}
   Fleet -- "payment mandate +<br/>EIP-3009 authorization" --> HSP
-  HSP -- "relayed transfer to the pool,<br/>payment-successful" --> C
+  HSP -- "transfer to the pool,<br/>included → safe → finalized" --> C
   W[Website: live floor, epochs,<br/>evidence chains, verify] <-- WebSocket --> C
 ```
 
@@ -73,18 +73,18 @@ flowchart LR
 
 ## HSP integration, honestly
 
-Kohaku follows the HSP route that the projects settling through HSP on GitHub use: the **HashKey Merchant API** (AP2 mandates over x402). The clearing service is the merchant and **every net debt in every epoch is an HSP order** paid by the debtor agent:
+Kohaku follows HashKey's HSP docs (<https://hashkey-merchant.github.io>): the **HashKey Merchant API**, AP2 mandates over x402. It is the agent-to-agent pattern HashKey describes for Track 2: the receiving side sends the payment conditions as a cart mandate, the paying agent builds a payment mandate from them and signs it with its own wallet, and HSP's gateway verifies it and executes the payment on chain. The clearing service is the merchant and **every net debt in every epoch is an HSP order** paid by the debtor agent:
 
 1. At epoch close the clearing service opens one HSP order per debtor: an AP2 **cart mandate** paying the exact net amount to the clearing pool, signed with an ES256K merchant JWT (`cart_hash`) and sent with HMAC-signed requests.
 2. The debtor agent reads the cart back from HSP and refuses to pay unless it is exactly its debt. It signs an **EIP-3009 `TransferWithAuthorization`** whose nonce is the settlement order reference (a hash of chain, clearing house, epoch, agent and amount), wraps it in an x402 **payment mandate** with the `user_authorization` JWT, and submits it to HSP's `pay-mandate`. No human, no wallet popup, no gas.
-3. HSP relays the transfer and reports `payment-successful`, by signed webhook (`X-Signature: t=…,v1=…`) and on its status endpoint.
-4. Kohaku marks the debt settled only when HSP reports success **and** Kohaku sees on chain the exact transfer from the debtor's registered wallet to the pool, consuming that authorization, **and** the clearing house contract confirms the pool received the money. The token itself refuses to pay one debt twice. If HSP is slow or down, settlements stay pending and are retried; open orders are polled, so nothing is lost.
+3. HSP executes the transfer and reports `payment-included`, `payment-safe`, then `payment-finalized`, by signed webhook (`X-Signature: t=…,v1=…`) and on its status endpoint.
+4. Kohaku marks the debt settled only when HSP reports the payment safe for this order, payee, token and amount **and** Kohaku sees on chain the exact transfer from the debtor's registered wallet to the pool, consuming that authorization, **and** the clearing house contract confirms the pool received the money. The token itself refuses to pay one debt twice. If HSP is slow or down, settlements stay pending and are retried; open orders are polled, so nothing is lost.
 
 There are two modes, and the app says which one is running:
 
 | Mode | What it does | When |
 |---|---|---|
-| `merchant` | Orders, payments and webhooks go through **HashKey Merchant** (`merchant-qa.hashkeymerchant.com` on testnet). HashKey relays the transfers. | Set `HSP_BASE_URL`, `HSP_APP_KEY`, `HSP_APP_SECRET` from HashKey onboarding, register the merchant public key, settle in a token HashKey supports. |
+| `merchant` | Orders, payments and webhooks go through **HashKey Merchant** (`merchant-qa.hashkeymerchant.com` on testnet, `hsp.hashkey.com` on mainnet). HashKey relays the transfers. | Set `HSP_APP_KEY` and `HSP_APP_SECRET` from HashKey onboarding, register the merchant public key, settle in USDC (the HashKey Chain token HSP settles by EIP-3009). `HSP_BASE_URL` defaults to HashKey's host for the network. |
 | `local` | The clearing service also runs a gateway that serves the **same HashKey Merchant endpoints** (`/hsp/api/v1/…`): it verifies the merchant JWT, the payment mandate and the EIP-3009 signature against the cart, relays the authorization and sends signed webhooks. Transfers are **real on-chain payments**. Labelled **"HSP local gateway"** everywhere. | Default until HashKey credentials and HashKey test USDC are in hand. |
 
 The clearing service and the agents run the same code in both modes. Kohaku never presents the local gateway as HashKey. See [DECISIONS.md](DECISIONS.md) §1–5.
@@ -164,13 +164,13 @@ On start the server gets a guest session: a fresh agent key, registered on chain
 | Creditors paid exactly; value conserved | Contract asserts payouts = net volume | fuzz, invariant `invariant_ValueConserved`, `invariant_PoolSolvent` |
 | Voided IOUs never affect positions | Voided IOUs are never posted; held-out IOUs posted at most once | `test_HeldOutIouIs…`, TS `voided IOUs never affect positions` |
 | Buyers never spend beyond their intent | Intent check before acceptance; refusals recorded | live, refusals visible on the floor |
-| HSP webhooks: authentic, fresh, exactly once | HMAC, five-minute window, event-id dedupe | `services/clearing/test/webhook.test.ts` |
+| HSP webhooks: authentic, fresh, exactly once | HMAC, five-minute window, dedupe per (request id, status) | `services/clearing/test/webhook.test.ts` |
 | TypeScript and Solidity agree bit for bit | Shared EIP-712 types, mirrored commitments | `packages/core/test/parity.test.ts` (vectors written by the contract tests) |
 
 ```bash
 pnpm test:contracts                     # 42 Foundry tests incl. fuzz (512 runs) and 4 invariants
 pnpm --filter @kohaku/core test          # netting, reputation, parity with the contract
-pnpm --filter @kohaku/clearing test      # HSP gateway, webhooks, reputation decay
+pnpm --filter @kohaku/clearing test      # HSP gateway, merchant checks, webhooks, reputation decay
 pnpm --filter @kohaku/fleet test         # agent work: fact checks, Rogue detection, summaries, charts
 pnpm e2e                                 # against a running stack: jobs → netting → HSP → payout → verify
 ```
