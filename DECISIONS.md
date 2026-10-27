@@ -325,6 +325,10 @@ why. Newest decisions are at the bottom of each section.
 - **Kohaku:** Oracle Cloud's Always Free Arm VM (Google Cloud's e2-micro as the fallback), set up by
   `deploy/vm/setup.sh`: Node 24, Caddy for HTTPS, a `kohaku@<network>` systemd unit. Mainnet uses its
   own ports (8797/8798/8800) so both networks can share the machine.
+- **Update:** Oracle's sign-up did not go through for us, so the backend goes on AWS EC2's Free plan in
+  Mumbai (sign-up credit, no charges while on that plan), close to Demo Day. The kit is plain Ubuntu,
+  so moving to Oracle later means running the same script there and copying the env file and ledger.
+  The API runs at `kohaku-api.caspx.in` and the website at `kohaku.caspx.in`, both on our own domain.
 
 ### 29. HSP follows HashKey's published docs
 

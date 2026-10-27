@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Prepare a fresh Ubuntu server (Oracle Cloud Always Free, Google Cloud e2-micro, any VPS) to run
+# Prepare a fresh Ubuntu server (Oracle Cloud Always Free, AWS EC2, Google Cloud e2-micro, any VPS) to run
 # the Kohaku backend: Node 24, the repository in /opt/kohaku, a systemd unit per network and
 # Caddy for HTTPS. Safe to run again (it also pulls the latest code).
 #
-#   sudo bash deploy/vm/setup.sh <domain>          e.g. kohaku-api.duckdns.org
+#   sudo bash deploy/vm/setup.sh <domain>          e.g. kohaku-api.caspx.in
 #
 # Then copy the env file(s) and the ledger over, and start the backend (see docs/DEPLOY.md).
 set -euo pipefail

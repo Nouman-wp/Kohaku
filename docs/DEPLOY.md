@@ -103,14 +103,16 @@ the ledger. Pick a real VM:
 |---|---|---|
 | Oracle Cloud Always Free | Arm VM up to 2 OCPU / 12 GB, 200 GB disk | Best fit; testnet and mainnet fit side by side. Card needed for verification. Choose a small shape (1 OCPU / 4 GB): Oracle may reclaim VMs that sit under 20% CPU, network and memory for a week. |
 | Google Cloud e2-micro | 1 GB RAM, 30 GB disk, US regions | Enough for testnet (the setup script adds swap). Card needed. |
+| AWS EC2, Free plan | $100 credit at sign-up (up to $100 more for onboarding tasks), no charges while on the Free plan | Mumbai region (`ap-south-1`). Pick an instance type marked "Free tier eligible" (`t3.small` if offered, else `t3.micro`; the setup script adds swap). Attach an Elastic IP so the address survives a stop and start. Card needed. |
 
 1. Create an Ubuntu 24.04 VM and open TCP 80 and 443 in the cloud firewall (on Oracle: the VCN's
-   security list). Point a free domain at its public IP (for example a DuckDNS name).
+   security list; on AWS: the instance's security group). Point a domain at its public IP: an `A`
+   record such as `kohaku-api.caspx.in`, or a free DuckDNS name.
 2. On the server:
 
    ```bash
    git clone https://github.com/Nouman-wp/Kohaku.git && cd Kohaku
-   sudo bash deploy/vm/setup.sh kohaku-api.duckdns.org
+   sudo bash deploy/vm/setup.sh kohaku-api.caspx.in
    ```
 
    It installs Node 24, pnpm and Caddy (automatic HTTPS), puts the code in `/opt/kohaku` under a
@@ -119,7 +121,10 @@ the ledger. Pick a real VM:
    again to lock its permissions. Bring the ledger too: stop the backend here and copy
    `.data/kohaku-hashkey-testnet-*.sqlite*`, or restore it from the Supabase mirror (section 5).
 4. `sudo systemctl enable --now kohaku@testnet`, then `journalctl -u kohaku@testnet -f`.
-5. Here: `node scripts/publish-web.mjs testnet --backend https://kohaku-api.duckdns.org`.
+5. Here: `node scripts/publish-web.mjs testnet --backend https://kohaku-api.caspx.in`. With the website
+   on its own domain as well (a `CNAME` such as `kohaku.caspx.in`, added to the Vercel project first),
+   add `--site https://kohaku.caspx.in`. `kohaku-xi.vercel.app` keeps working, and the agent cards
+   registered on chain point at it.
 
 Mainnet runs next to it on its own ports (`PORT=8797`, `FLEET_PORT=8798`, `EDGE_PORT=8800` in
 `.env.mainnet`) with `kohaku@mainnet` and a second domain in `/etc/caddy/Caddyfile`.
