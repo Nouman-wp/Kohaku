@@ -117,16 +117,16 @@ All screenshots come from a local run (`pnpm dev`). Every number on them is live
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/hero.webp" alt="Landing page with live stats" /><br/><sub><b>Landing page.</b> The stats bar reads the live API: epoch clock, agents, jobs cleared, transfers avoided, value settled through HSP.</sub></td>
-    <td width="50%"><img src="docs/screenshots/netting.webp" alt="Netting showcase" /><br/><sub><b>Many payments in, a handful out.</b> The latest sealed epoch's real net positions: 70 IOUs became 7 transfers.</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/hero.webp" alt="Landing page with live stats" /><br/><sub><b>Landing page.</b> The stats bar reads the live API: epoch clock, agents, jobs cleared, transfers avoided, value settled through HSP.</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/netting.webp" alt="Netting showcase" /><br/><sub><b>Many payments in, a handful out.</b> The latest sealed epoch's real net positions: 70 IOUs became 7 transfers.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/epoch.webp" alt="Epoch detail page" /><br/><sub><b>Epoch receipt.</b> On-chain commitments, the transactions, every agent's net position, and how each one was settled (paid via HSP or paid out).</sub></td>
-    <td><img src="docs/screenshots/job.webp" alt="Job evidence chain" /><br/><sub><b>Chain of evidence.</b> One $0.0004 search: job, quote, IOU, delivery and settlement. Every signature is re-verified in the browser.</sub></td>
+    <td valign="top"><img src="docs/screenshots/epoch.webp" alt="Epoch detail page" /><br/><sub><b>Epoch receipt.</b> On-chain commitments, the transactions, every agent's net position, and how each one was settled (paid via HSP or paid out).</sub></td>
+    <td valign="top"><img src="docs/screenshots/job.webp" alt="Job evidence chain" /><br/><sub><b>Chain of evidence.</b> One $0.0004 search: job, quote, IOU, delivery and settlement. Every signature is re-verified in the browser.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/verify.webp" alt="Verify page" /><br/><sub><b>Don't trust us, re-check the chain.</b> The browser recomputes digests, signatures and netting, and compares them with what the contract stored.</sub></td>
-    <td><img src="docs/screenshots/disputes.webp" alt="Disputes page" /><br/><sub><b>Recourse for bad work.</b> Rogue cites example.com, the orchestrator disputes, Arbiter upholds, and the IOU never reaches netting.</sub></td>
+    <td valign="top"><img src="docs/screenshots/verify.webp" alt="Verify page" /><br/><sub><b>Don't trust us, re-check the chain.</b> The browser recomputes digests, signatures and netting, and compares them with what the contract stored.</sub></td>
+    <td valign="top"><img src="docs/screenshots/disputes.webp" alt="Disputes page" /><br/><sub><b>Recourse for bad work.</b> Rogue cites example.com, the orchestrator disputes, Arbiter upholds, and the IOU never reaches netting.</sub></td>
   </tr>
 </table>
 
@@ -152,14 +152,14 @@ sequenceDiagram
   participant D as Debtor agent
   participant T as USDC (EIP-3009)
   participant K as KohakuClearingHouse
-  C->>H: create order: cart mandate for the exact net debt, merchant JWT, HMAC-signed request
+  C->>H: create order (cart mandate for the net debt)
   H-->>C: payment_request_id + payment_url
-  D->>H: read the cart back, refuse unless it equals its own debt
-  D->>H: payment mandate + TransferWithAuthorization (nonce = settlement order reference)
-  H->>T: relay the authorization: debtor wallet to the clearing pool
-  H-->>C: webhooks: payment-included, payment-safe, payment-finalized
-  C->>T: confirm the exact transfer on chain and that the nonce is consumed
-  C->>K: recordSettlement: the contract checks that the pool received the money
+  D->>H: read the cart, check it equals its debt
+  D->>H: payment mandate + EIP-3009 authorization
+  H->>T: relay the transfer to the clearing pool
+  H-->>C: webhooks: included, safe, finalized
+  C->>T: check the exact transfer on chain
+  C->>K: recordSettlement (pool balance checked)
 ```
 
 Kohaku marks a debt settled only when all three of these hold:
@@ -167,7 +167,7 @@ Kohaku marks a debt settled only when all three of these hold:
 - Kohaku sees on chain the exact transfer from the debtor's registered wallet, consuming that authorization.
 - The contract confirms the pool received the money.
 
-The token itself refuses to pay one debt twice. If HSP is slow or down, settlements stay pending and are retried; open orders are polled, so nothing is lost.
+The authorization's nonce is the settlement order reference (a hash of chain, clearing house, epoch, agent and amount), so the token itself refuses to pay one debt twice. If HSP is slow or down, settlements stay pending and are retried; open orders are polled, so nothing is lost.
 
 | Mode | What it does | When |
 |---|---|---|
