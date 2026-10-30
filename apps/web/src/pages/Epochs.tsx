@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import type { EpochView } from "@kohaku/core";
 import { API, useApi, useLive, agentName, type EpochDetail } from "../lib/api.ts";
 import { ago, pct, short, signedUsd, usd, explorerTx, explorerAddr } from "../lib/format.ts";
-import { AgentGem, Badge, Btn, Empty, HashLink, Panel, Pill, Stat } from "../components/ui.tsx";
+import { AgentGem, Btn, Empty, HashLink, PageHead, Panel, Pill, Stat, Stats } from "../components/ui.tsx";
 
 const phaseTone = (p: string) => (p === "sealed" ? "good" : p === "failed" ? "warn" : p === "intake" ? "muted" : "accent");
 
@@ -17,41 +17,50 @@ export function EpochList() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="page-head">
-          <div>
-            <Badge>Epochs</Badge>
-            <h1 className="page-title">Every epoch, sealed in amber</h1>
-            <p className="page-sub">Each row is one clearing cycle: the IOUs it collected, how far netting compressed them, and whether every debtor has settled through HSP.</p>
-          </div>
-        </div>
-        <div className="grid grid-4" style={{ marginBottom: 16 }}>
+        <PageHead
+          title="Epochs"
+          sub="Each row is one clearing cycle: the IOUs it collected, how far netting compressed them, and whether every debtor has settled through HSP. Every one is sealed, like amber."
+        />
+        <Stats>
           <Stat label="Epochs sealed" value={sealed.length} />
-          <Stat label="IOUs cleared" value={ious.toLocaleString()} />
-          <Stat label="Settlement transfers" value={transfers.toLocaleString()} />
+          <Stat label="IOUs cleared" value={ious.toLocaleString("en-US")} />
+          <Stat label="Settlement transfers" value={transfers.toLocaleString("en-US")} />
           <Stat label="Payments avoided" value={ious ? pct(Math.max(0, ious - transfers) / ious) : "—"} accent />
-        </div>
+        </Stats>
         <Panel>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Epoch</th>
-                  <th>Phase</th>
-                  <th className="num">IOUs</th>
-                  <th className="num">Gross</th>
-                  <th className="num">Transfers</th>
-                  <th className="num">Net</th>
-                  <th className="num">Saved</th>
-                  <th>Disputes</th>
-                  <th>On chain</th>
-                  <th>Receipt</th>
+                  <th scope="col">Epoch</th>
+                  <th scope="col">Phase</th>
+                  <th scope="col" className="num">
+                    IOUs
+                  </th>
+                  <th scope="col" className="num">
+                    Gross
+                  </th>
+                  <th scope="col" className="num">
+                    Transfers
+                  </th>
+                  <th scope="col" className="num">
+                    Net
+                  </th>
+                  <th scope="col" className="num">
+                    Saved
+                  </th>
+                  <th scope="col">Disputes</th>
+                  <th scope="col">On chain</th>
+                  <th scope="col">Receipt</th>
                 </tr>
               </thead>
               <tbody>
                 {epochs.map((e) => (
                   <tr key={e.id} className="row-link" onClick={() => nav(`/epochs/${e.id}`)}>
                     <td>
-                      <b>{e.id}</b>
+                      <Link to={`/epochs/${e.id}`} className="cell-link" onClick={(ev) => ev.stopPropagation()}>
+                        {e.id}
+                      </Link>
                     </td>
                     <td>
                       <Pill tone={phaseTone(e.phase)}>{e.phase}</Pill>
@@ -67,7 +76,7 @@ export function EpochList() {
                       {e.error && <span className="muted"> · retrying</span>}
                     </td>
                     <td>
-                      <span className="mono dim">{short(e.receiptHash, 5)}</span>
+                      <span className="mono muted">{short(e.receiptHash, 5)}</span>
                     </td>
                   </tr>
                 ))}
@@ -92,34 +101,42 @@ export function EpochPage() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="crumbs">
-          <Link to="/epochs">Epochs</Link> / <span>{e.id}</span>
-        </div>
-        <div className="page-head">
-          <div>
-            <Badge>{e.phase === "sealed" ? "Sealed" : e.phase}</Badge>
-            <h1 className="page-title">Epoch {e.id}</h1>
-            <p className="page-sub">
-              Opened {ago(e.startsAt)}. {e.iouCount} IOUs netted into {e.settlementTransfers} transfers. {e.error ? `Last error: ${e.error}` : ""}
-            </p>
-          </div>
-          <div className="control-bar">
-            <Btn to={`/verify?epoch=${e.id}`}>Verify independently</Btn>
-            <Btn href={`${API}/v1/epochs/${e.id}/export.csv`} variant="secondary">
-              Audit export (CSV)
-            </Btn>
-          </div>
-        </div>
+        <PageHead
+          crumbs={
+            <>
+              <Link to="/epochs">Epochs</Link> / <span>Epoch {e.id}</span>
+            </>
+          }
+          title={`Epoch ${e.id}`}
+          meta={
+            <>
+              <Pill tone={phaseTone(e.phase)}>{e.phase}</Pill>
+              <span>Opened {ago(e.startsAt)}</span>
+              <span>
+                {e.iouCount} IOUs netted into {e.settlementTransfers} transfers
+              </span>
+            </>
+          }
+          sub={e.error ? `Last error: ${e.error}` : undefined}
+          actions={
+            <>
+              <Btn to={`/verify?epoch=${e.id}`}>Verify independently</Btn>
+              <Btn href={`${API}/v1/epochs/${e.id}/export.csv`} variant="secondary">
+                Audit export (CSV)
+              </Btn>
+            </>
+          }
+        />
 
-        <div className="grid grid-5" style={{ marginBottom: 16 }}>
+        <Stats>
           <Stat label="IOUs" value={e.iouCount} hint={`${e.carried} carried in · ${e.heldOut} held out`} />
           <Stat label="Gross obligations" value={usd(e.grossVolume, 4)} />
           <Stat label="Net settled" value={usd(e.netVolume, 4)} hint={`${pct(e.volumeReduction)} of value never moved`} />
           <Stat label="Transfers" value={`${e.settlementTransfers}`} hint={`${e.debtors} pay-ins · ${e.creditors} payouts`} />
           <Stat label="Payments avoided" value={e.iouCount ? pct(e.transferReduction) : "—"} hint={`${e.transfersAvoided} fewer`} accent />
-        </div>
+        </Stats>
 
-        <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <div className="grid grid-2-wide" style={{ marginBottom: 16 }}>
           <Panel title="On-chain record">
             <dl className="kv">
               <dt>Status</dt>
@@ -151,16 +168,20 @@ export function EpochPage() {
             </dl>
             {data.txs.length > 0 && (
               <>
-                <div className="muted" style={{ fontSize: 13, margin: "14px 0 6px" }}>
-                  Transactions
-                </div>
-                {data.txs.map((t) => (
-                  <div key={t.hash} className="dim" style={{ fontSize: 13, display: "flex", gap: 8 }}>
-                    <span style={{ minWidth: 100 }}>{t.kind}</span>
-                    <HashLink hash={t.hash} href={explorerTx(explorer, t.hash)} n={6} />
-                    <span className="muted">{t.gas_used?.toLocaleString()} gas</span>
-                  </div>
-                ))}
+                <h3 className="panel-sub">Transactions</h3>
+                <table className="table">
+                  <tbody>
+                    {data.txs.map((t) => (
+                      <tr key={t.hash}>
+                        <td className="dim">{t.kind}</td>
+                        <td>
+                          <HashLink hash={t.hash} href={explorerTx(explorer, t.hash)} n={6} />
+                        </td>
+                        <td className="num muted">{t.gas_used ? `${t.gas_used.toLocaleString("en-US")} gas` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </>
             )}
           </Panel>
@@ -169,11 +190,17 @@ export function EpochPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Agent</th>
-                    <th className="num">Sold</th>
-                    <th className="num">Bought</th>
-                    <th className="num">Net</th>
-                    <th>Settlement</th>
+                    <th scope="col">Agent</th>
+                    <th scope="col" className="num">
+                      Sold
+                    </th>
+                    <th scope="col" className="num">
+                      Bought
+                    </th>
+                    <th scope="col" className="num">
+                      Net
+                    </th>
+                    <th scope="col">Settlement</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -221,7 +248,7 @@ export function EpochPage() {
         </div>
 
         {data.settlements.length > 0 && (
-          <Panel title="HSP settlements" className="panel-glass">
+          <Panel title="HSP settlements">
             <div className="table-wrap">
               <table className="table">
                 <thead>
@@ -265,17 +292,19 @@ export function EpochPage() {
           </Panel>
         )}
 
-        <Panel title={`Signed IOUs (${data.ious.length})`} className="" actions={<span className="muted" style={{ fontSize: 13 }}>Every row links to its full evidence chain</span>}>
+        <Panel title={`Signed IOUs (${data.ious.length})`} actions={<span className="muted" style={{ fontSize: 13 }}>Every digest links to its full evidence chain</span>}>
           <div className="table-wrap" style={{ maxHeight: 560, overflow: "auto" }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th>Digest</th>
-                  <th>Buyer</th>
-                  <th>Seller</th>
-                  <th className="num">Amount</th>
-                  <th>Nonce</th>
-                  <th>Status</th>
+                  <th scope="col">Digest</th>
+                  <th scope="col">Buyer</th>
+                  <th scope="col">Seller</th>
+                  <th scope="col" className="num">
+                    Amount
+                  </th>
+                  <th scope="col">Nonce</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -306,8 +335,8 @@ export function EpochPage() {
 
 export function Loading() {
   return (
-    <main className="page">
-      <div className="page-inner">
+    <main className="page" aria-busy="true">
+      <div className="page-inner empty-page">
         <Empty>Loading…</Empty>
       </div>
     </main>
@@ -317,10 +346,11 @@ export function Loading() {
 export function Missing({ what, error }: { what: string; error: string }) {
   return (
     <main className="page">
-      <div className="page-inner">
-        <Empty>
-          Could not load {what}: {error}
-        </Empty>
+      <div className="page-inner empty-page">
+        <h1 className="page-title">Could not load {what}</h1>
+        <p className="page-sub">
+          {error}. Check the link, or go back to the <Link to="/floor" className="accent">live floor</Link>.
+        </p>
       </div>
     </main>
   );

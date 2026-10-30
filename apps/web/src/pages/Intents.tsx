@@ -5,7 +5,7 @@ import { INTENT_TYPES, usd as toUnits, type IntentView, type JobView } from "@ko
 import { api, fleet, useApi, useLive, agentName } from "../lib/api.ts";
 import { ago, usd, short } from "../lib/format.ts";
 import { useConfig, useWallet } from "../lib/wallet.ts";
-import { AgentGem, Badge, Btn, Empty, Panel, Pill, Stat } from "../components/ui.tsx";
+import { AgentGem, Btn, Empty, PageHead, Panel, Pill, Stat, Stats } from "../components/ui.tsx";
 import { Loading, Missing } from "./Epochs.tsx";
 
 const SERVICES = ["search", "factcheck", "summarize", "translate", "describe", "verdict"];
@@ -90,26 +90,21 @@ export function IntentComposer() {
   return (
     <main className="page">
       <div className="page-inner" style={{ maxWidth: 1000 }}>
-        <div className="page-head">
-          <div>
-            <Badge>AP2 intent mandate</Badge>
-            <h1 className="page-title">Give an agent a budget</h1>
-            <p className="page-sub">
-              You sign the goal, the budget, the deadline and the limits. The agent spends inside them and nothing else: any purchase that would break the mandate is refused before it happens, in
-              public.
-            </p>
-          </div>
-        </div>
-        <Panel className="panel-glass">
+        <PageHead
+          title="Give an agent a budget"
+          meta={<span>AP2 intent mandate</span>}
+          sub="You sign the goal, the budget, the deadline and the limits. The agent spends inside them and nothing else: any purchase that would break the mandate is refused before it happens, in public."
+        />
+        <Panel>
           <div className="form-grid">
             <div className="field span-2">
-              <label>Goal</label>
-              <textarea className="textarea" value={goal} onChange={(e) => setGoal(e.target.value)} />
-              <small>Mention Hindi to get a bilingual brief from the Orchestrator.</small>
+              <label htmlFor="intent-goal">Goal</label>
+              <textarea id="intent-goal" className="textarea" name="goal" aria-describedby="intent-goal-hint" value={goal} onChange={(e) => setGoal(e.target.value)} />
+              <small id="intent-goal-hint">Mention Hindi to get a bilingual brief from the Orchestrator.</small>
             </div>
             <div className="field">
-              <label>Buyer agent</label>
-              <select className="select" value={buyerId} onChange={(e) => setBuyer(e.target.value)}>
+              <label htmlFor="intent-buyer">Buyer agent</label>
+              <select id="intent-buyer" className="select" name="buyer" value={buyerId} onChange={(e) => setBuyer(e.target.value)}>
                 {live.agents.map((a) => (
                   <option key={a.agentId} value={a.agentId}>
                     {a.name} (#{a.agentId})
@@ -118,51 +113,71 @@ export function IntentComposer() {
               </select>
             </div>
             <div className="field">
-              <label>Budget (USDC)</label>
-              <input className="input" value={budget} onChange={(e) => setBudget(e.target.value)} />
+              <label htmlFor="intent-budget">Budget (USDC)</label>
+              <input id="intent-budget" className="input" name="budget" inputMode="decimal" autoComplete="off" value={budget} onChange={(e) => setBudget(e.target.value)} />
             </div>
             <div className="field">
-              <label>Per-job cap (USDC)</label>
-              <input className="input" value={cap} onChange={(e) => setCap(e.target.value)} />
+              <label htmlFor="intent-cap">Per-job cap (USDC)</label>
+              <input id="intent-cap" className="input" name="per-job-cap" inputMode="decimal" autoComplete="off" value={cap} onChange={(e) => setCap(e.target.value)} />
             </div>
             <div className="field">
-              <label>Minimum seller reputation (0–100)</label>
-              <input className="input" value={minRep} onChange={(e) => setMinRep(e.target.value)} />
+              <label htmlFor="intent-rep">Minimum seller reputation (0–100)</label>
+              <input id="intent-rep" className="input" name="min-reputation" inputMode="decimal" autoComplete="off" value={minRep} onChange={(e) => setMinRep(e.target.value)} />
             </div>
             <div className="field">
-              <label>Valid for (hours)</label>
-              <input className="input" value={hours} onChange={(e) => setHours(e.target.value)} />
+              <label htmlFor="intent-hours">Valid for (hours)</label>
+              <input id="intent-hours" className="input" name="hours" inputMode="decimal" autoComplete="off" value={hours} onChange={(e) => setHours(e.target.value)} />
             </div>
-            <div className="field">
-              <label>Allowed services (none selected = all)</label>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div className="field span-2" role="group" aria-labelledby="intent-services">
+              <span id="intent-services" className="label">
+                Allowed services <span className="muted">(none selected allows all)</span>
+              </span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {SERVICES.map((s) => (
-                  <button key={s} type="button" onClick={() => setServices((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]))}>
-                    <Pill tone={services.includes(s) ? "accent" : "muted"}>{s}</Pill>
+                  <button key={s} type="button" className="choice" aria-pressed={services.includes(s)} onClick={() => setServices((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]))}>
+                    {s}
                   </button>
                 ))}
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end", marginTop: 24 }}>
+          <div className="intent-actions">
             <div>
               {!wallet.address ? (
-                <Btn onClick={wallet.connect}>Connect wallet to sign</Btn>
+                <Btn variant="accent" onClick={wallet.connect}>
+                  Connect wallet to sign
+                </Btn>
               ) : (
-                <Btn onClick={signWithWallet} disabled={!isOperator}>
-                  Sign with {short(wallet.address, 4)}
+                <Btn variant="accent" onClick={signWithWallet} disabled={!isOperator}>
+                  Sign with <span className="mono">{short(wallet.address, 4)}</span>
                 </Btn>
               )}
-              {wallet.address && !isOperator && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Only {buyerAgent?.name ?? "the agent"}'s operator can authorise its spending.</div>}
+              {wallet.address && !isOperator && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Only {buyerAgent?.name ?? "the agent"}’s operator can authorise its spending.</div>}
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input className="input" type="password" style={{ width: 150 }} placeholder="admin token" value={token} onChange={(e) => setToken(e.target.value)} />
+            <div className="intent-demo">
+              <input
+                className="input"
+                type="password"
+                name="admin-token"
+                autoComplete="off"
+                aria-label="Admin token"
+                style={{ width: 160 }}
+                placeholder="Admin token…"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
               <Btn variant="secondary" onClick={signWithDemoOperator} disabled={!token}>
                 Sign as the demo fleet operator
               </Btn>
             </div>
           </div>
-          {msg && <div className="notice" style={{ marginTop: 16 }}>{msg}</div>}
+          <div aria-live="polite">
+            {msg && (
+              <div className="notice" style={{ marginTop: 16 }}>
+                {msg}
+              </div>
+            )}
+          </div>
         </Panel>
       </div>
     </main>
@@ -211,28 +226,31 @@ export function IntentPage() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="crumbs">
-          <Link to={`/agents/${i.buyer}`}>{agentName(live.agents, i.buyer)}</Link> / <span>intent {short(i.id, 6)}</span>
-        </div>
-        <div className="page-head">
-          <div>
-            <Badge>Intent · {i.status}</Badge>
-            <h1 className="page-title" style={{ fontSize: 36, lineHeight: "44px" }}>
-              “{i.goal}”
-            </h1>
-            <p className="page-sub">
-              Signed by operator <span className="mono">{short(i.operator, 4)}</span> for {agentName(live.agents, i.buyer)}. Valid until {new Date(i.deadline * 1000).toLocaleTimeString()}. Minimum seller
-              reputation {(i.minSellerReputation / 10).toFixed(1)}.
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-4" style={{ marginBottom: 16 }}>
+        <PageHead
+          crumbs={
+            <>
+              <Link to={`/agents/${i.buyer}`}>{agentName(live.agents, i.buyer)}</Link> / <span className="mono">intent {short(i.id, 6)}</span>
+            </>
+          }
+          title={<>“{i.goal}”</>}
+          meta={
+            <>
+              <Pill tone={i.status === "active" ? "accent" : "muted"}>{i.status}</Pill>
+              <span>
+                Signed by <span className="mono">{short(i.operator, 4)}</span> for {agentName(live.agents, i.buyer)}
+              </span>
+              <span>Valid until {new Date(i.deadline * 1000).toLocaleTimeString()}</span>
+              <span>Minimum seller reputation {(i.minSellerReputation / 10).toFixed(1)}</span>
+            </>
+          }
+        />
+        <Stats>
           <Stat label="Spent" value={usd(i.spent, 4)} hint={`of ${usd(i.budget)} budget`} accent />
           <Stat label="Paid jobs" value={i.jobs} />
           <Stat label="Refused by policy" value={i.refusals} />
           <Stat label="Per-job cap" value={usd(i.perJobCap, 4)} />
-        </div>
-        <div className="progress" style={{ marginBottom: 20 }}>
+        </Stats>
+        <div className="progress" style={{ marginBottom: 20 }} role="progressbar" aria-label="Budget spent" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, spent * 100))}>
           <i style={{ width: `${Math.min(100, spent * 100)}%` }} />
         </div>
         <div className="grid grid-2" style={{ marginBottom: 16 }}>
@@ -261,7 +279,7 @@ export function IntentPage() {
           </Panel>
         </div>
         {brief?.result && (
-          <Panel className="panel-glass" title="The brief">
+          <Panel title="The brief">
             <div className="brief">
               <h3>{brief.result.topic}</h3>
               <p>{brief.result.summary.en}</p>
@@ -314,8 +332,8 @@ export function IntentPage() {
           </Panel>
           <Panel title="Refusals">
             {data.refusals.map((r) => (
-              <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line-soft)", fontSize: 14 }}>
-                <Pill tone="warn">refused</Pill> {r.service ?? "?"} {r.amount ? usd(r.amount, 4) : ""} <span className="dim">{r.reason}</span>
+              <div key={r.id} className="list-row dispute-line">
+                <Pill tone="warn">refused</Pill> {r.service ?? "?"} {r.amount ? <span className="mono">{usd(r.amount, 4)}</span> : ""} <span className="dim">{r.reason}</span>
               </div>
             ))}
             {!data.refusals.length && <Empty>Nothing refused. Every purchase so far fits the mandate.</Empty>}
@@ -325,5 +343,3 @@ export function IntentPage() {
     </main>
   );
 }
-
-

@@ -1,9 +1,13 @@
-// Generates the Kohaku mark: a cut amber gem in the violet cosmos, with a constellation
-// of agent nodes netted into one warm core. Writes SVG + PNG renders.
+// Generates the Kohaku mark: a cut gem on black with a lemon-green rim (caspx.in's palette),
+// holding a constellation of agent nodes netted into one lit core. Flat colours only.
+// Writes SVG + PNG renders.
 import { writeFileSync } from "node:fs";
 import { Resvg } from "@resvg/resvg-js";
 
 const out = process.argv[2] ?? ".";
+const LIME = "#b8f34d";
+const INK = "#ececea";
+const INK_BG = "#0a0a0a";
 const C = 256;
 
 function roundedPolygon(points, r) {
@@ -58,51 +62,25 @@ const facetLines = gem.map((p, i) => `<line x1="${p[0]}" y1="${p[1]}" x2="${tabl
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="kb" cx="44%" cy="30%" r="78%">
-      <stop offset="0" stop-color="#3a2391"/>
-      <stop offset="0.42" stop-color="#1b0f57"/>
-      <stop offset="1" stop-color="#070320"/>
-    </radialGradient>
-    <linearGradient id="kr" x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0" stop-color="#f3d2ff"/>
-      <stop offset="0.45" stop-color="#ab92ff"/>
-      <stop offset="1" stop-color="#6f7dff"/>
-    </linearGradient>
-    <radialGradient id="kc" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#fff6df"/>
-      <stop offset="0.22" stop-color="#ffd27f"/>
-      <stop offset="0.5" stop-color="#ff9f45" stop-opacity="0.75"/>
-      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="kh" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#c7b3ff" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#c7b3ff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="kg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
     <clipPath id="kclip"><path d="${gemPath}"/></clipPath>
   </defs>
-  <path d="${gemPath}" fill="url(#kb)"/>
+  <path d="${gemPath}" fill="${INK_BG}"/>
   <g clip-path="url(#kclip)">
-    <circle cx="${C}" cy="${C - 40}" r="230" fill="url(#kh)"/>
-    <g stroke="#cbb8ff" stroke-opacity="0.22" stroke-width="3">${facetLines}</g>
-    <path d="${tablePath}" fill="#ffffff" fill-opacity="0.035" stroke="#d9c9ff" stroke-opacity="0.28" stroke-width="3"/>
-    <circle cx="${core[0]}" cy="${core[1]}" r="92" fill="url(#kc)"/>
-    <g stroke="#efe6ff" stroke-opacity="0.75" stroke-width="4.5" stroke-linecap="round">
+    <g stroke="${INK}" stroke-opacity="0.16" stroke-width="3">${facetLines}</g>
+    <path d="${tablePath}" fill="none" stroke="${INK}" stroke-opacity="0.24" stroke-width="3"/>
+    <g stroke="${INK}" stroke-opacity="0.8" stroke-width="4.5" stroke-linecap="round">
       ${nodes.map(([x, y]) => `<line x1="${x}" y1="${y}" x2="${core[0]}" y2="${core[1]}"/>`).join("")}
     </g>
-    <g stroke="#efe6ff" stroke-opacity="0.32" stroke-width="3" stroke-linecap="round">
+    <g stroke="${INK}" stroke-opacity="0.3" stroke-width="3" stroke-linecap="round">
       <line x1="${nodes[0][0]}" y1="${nodes[0][1]}" x2="${nodes[1][0]}" y2="${nodes[1][1]}"/>
       <line x1="${nodes[2][0]}" y1="${nodes[2][1]}" x2="${nodes[3][0]}" y2="${nodes[3][1]}"/>
       <line x1="${nodes[3][0]}" y1="${nodes[3][1]}" x2="${nodes[4][0]}" y2="${nodes[4][1]}"/>
     </g>
-    ${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#f4f0ff"/>`).join("")}
-    <circle cx="${core[0]}" cy="${core[1]}" r="17" fill="#fff8e8"/>
-    <path d="M ${C - 150} ${C - 120} Q ${C} ${C - 250} ${C + 150} ${C - 120} L ${C + 150} ${C - 260} L ${C - 150} ${C - 260} Z" fill="url(#kg)"/>
+    ${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}"/>`).join("")}
+    <circle cx="${core[0]}" cy="${core[1]}" r="38" fill="${LIME}" fill-opacity="0.16"/>
+    <circle cx="${core[0]}" cy="${core[1]}" r="22" fill="${LIME}"/>
   </g>
-  <path d="${gemPath}" fill="none" stroke="url(#kr)" stroke-width="9"/>
+  <path d="${gemPath}" fill="none" stroke="${LIME}" stroke-width="10"/>
 </svg>
 `;
 
@@ -113,10 +91,10 @@ for (const size of [512, 180, 64, 32]) {
 }
 // preview on the app's dark canvas
 const preview = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400">
-  <rect width="900" height="400" fill="#030014"/>
+  <rect width="900" height="400" fill="#000"/>
   <g transform="translate(40,40) scale(0.625)">${svg.replace(/<\?xml[^>]*>/, "").replace(/<svg[^>]*>/, "").replace("</svg>", "")}</g>
   <g transform="translate(420,150) scale(0.125)">${svg.replace(/<svg[^>]*>/, "").replace("</svg>", "").replaceAll('id="k', 'id="s').replaceAll("url(#k", "url(#s")}</g>
-  <text x="494" y="185" font-family="Segoe UI, Arial" font-weight="500" font-size="34" fill="#f4f0ff">Kohaku</text>
+  <text x="494" y="185" font-family="Segoe UI, Arial" font-weight="500" font-size="34" fill="#ececea">Kohaku</text>
   <g transform="translate(420,260) scale(0.0625)">${svg.replace(/<svg[^>]*>/, "").replace("</svg>", "").replaceAll('id="k', 'id="t').replaceAll("url(#k", "url(#t")}</g>
 </svg>`;
 writeFileSync(`${out}/preview.png`, new Resvg(preview, { fitTo: { mode: "width", value: 900 }, font: { loadSystemFonts: true } }).render().asPng());

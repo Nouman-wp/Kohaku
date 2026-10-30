@@ -1,14 +1,46 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { API, FLEET, useApi } from "../lib/api.ts";
 import { useConfig } from "../lib/wallet.ts";
 import { explorerAddr } from "../lib/format.ts";
-import { Badge, Btn, HashLink, Panel, Pill } from "../components/ui.tsx";
+import { Btn, HashLink, PageHead, Panel, Pill } from "../components/ui.tsx";
 import { REPO } from "../components/chrome.tsx";
+
+const TOC = [
+  ["quickstart", "Quickstart"],
+  ["sell", "Sell a service"],
+  ["hire", "Hire an agent"],
+  ["mcp", "MCP server"],
+  ["hsp", "HSP settlement"],
+  ["contracts", "Contracts"],
+  ["reputation", "Reputation formula"],
+  ["invariants", "Invariants"],
+  ["api", "API"],
+] as const;
+const TOC_IDS = TOC.map(([id]) => id);
+
+/** The section heading nearest the top of the viewport. */
+function useActiveSection(ids: readonly string[]): string {
+  const [active, setActive] = useState(ids[0]!);
+  useEffect(() => {
+    const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (top) setActive(top.target.id);
+      },
+      { rootMargin: "-80px 0px -65% 0px" },
+    );
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, [ids]);
+  return active;
+}
 
 export function Developers() {
   const cfg = useConfig();
   const loc = useLocation();
+  const active = useActiveSection(TOC_IDS);
   useEffect(() => {
     if (loc.hash) document.getElementById(loc.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [loc.hash, cfg]);
@@ -17,27 +49,22 @@ export function Developers() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="page-head">
-          <div>
-            <Badge>Developers</Badge>
-            <h1 className="page-title">Build on Kohaku</h1>
-            <p className="page-sub">Sell a service, hire agents, or plug an MCP client into the economy. Everything below runs against this deployment.</p>
-          </div>
-          <Btn href={REPO} variant="secondary">
-            Source on GitHub
-          </Btn>
-        </div>
+        <PageHead
+          title="Build on Kohaku"
+          sub="Sell a service, hire agents, or plug an MCP client into the economy. Everything below runs against this deployment."
+          actions={
+            <Btn href={REPO} variant="secondary">
+              Source on GitHub
+            </Btn>
+          }
+        />
         <div className="doc-layout">
-          <nav className="toc">
-            <a href="#quickstart">Quickstart</a>
-            <a href="#sell">Sell a service</a>
-            <a href="#hire">Hire an agent</a>
-            <a href="#mcp">MCP server</a>
-            <a href="#hsp">HSP settlement</a>
-            <a href="#contracts">Contracts</a>
-            <a href="#reputation">Reputation formula</a>
-            <a href="#invariants">Invariants</a>
-            <a href="#api">API</a>
+          <nav className="toc" aria-label="On this page">
+            {TOC.map(([id, label]) => (
+              <a key={id} href={`#${id}`} className={active === id ? "on" : ""} aria-current={active === id ? "location" : undefined}>
+                {label}
+              </a>
+            ))}
           </nav>
           <article className="doc">
             <h2 id="quickstart" style={{ marginTop: 0 }}>
@@ -234,18 +261,24 @@ export function Status() {
   return (
     <main className="page">
       <div className="page-inner" style={{ maxWidth: 1000 }}>
-        <div className="page-head">
-          <div>
-            <Badge>System status</Badge>
-            <h1 className="page-title">Health</h1>
-            <p className="page-sub">The clearing service, the chain connection, HSP, and the agent fleet, refreshed every few seconds.</p>
-          </div>
-        </div>
-        {error && <div className="notice warn">Clearing service unreachable: {error}</div>}
+        <PageHead
+          title="System status"
+          meta={
+            data ? (
+              <Pill tone={data.ok ? "good" : "warn"}>{data.ok ? "all systems healthy" : "degraded"}</Pill>
+            ) : error ? (
+              <Pill tone="warn">unreachable</Pill>
+            ) : (
+              <span>Checking…</span>
+            )
+          }
+          sub="The clearing service, the chain connection, HSP and the agent fleet, refreshed every few seconds."
+        />
+        {error && <div className="notice warn">Clearing service unreachable: {error}. Retrying every few seconds.</div>}
         {data && (
           <div className="grid grid-2">
             {(["clearing", "chain", "hsp", "fleet"] as const).map((k) => (
-              <Panel key={k} title={k}>
+              <Panel key={k} title={k === "hsp" ? "HSP" : k[0]!.toUpperCase() + k.slice(1)}>
                 <pre className="json" style={{ maxHeight: 420 }}>
                   {JSON.stringify(data[k], null, 2)}
                 </pre>
