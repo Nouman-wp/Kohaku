@@ -103,7 +103,7 @@ the ledger. Pick a real VM:
 |---|---|---|
 | Oracle Cloud Always Free | Arm VM up to 2 OCPU / 12 GB, 200 GB disk | Best fit; testnet and mainnet fit side by side. Card needed for verification. Choose a small shape (1 OCPU / 4 GB): Oracle may reclaim VMs that sit under 20% CPU, network and memory for a week. |
 | Google Cloud e2-micro | 1 GB RAM, 30 GB disk, US regions | Enough for testnet (the setup script adds swap). Card needed. |
-| AWS EC2, Free plan | $100 credit at sign-up (up to $100 more for onboarding tasks), no charges while on the Free plan | Mumbai region (`ap-south-1`). Pick an instance type marked "Free tier eligible" (`t3.small` if offered, else `t3.micro`; the setup script adds swap). Attach an Elastic IP so the address survives a stop and start. Card needed. |
+| AWS EC2, Free plan | $100 credit at sign-up (up to $100 more for onboarding tasks), no charges while on the Free plan; it ends after 6 months or when the credit runs out | Accounts on the new AWS experience can only create resources in the project's Region (ours is Sydney, `ap-southeast-2`). Kohaku testnet runs on a `t3.small` (2 GB) with CPU credits set to `standard`, so bursts never bill extra. Attach an Elastic IP so the address survives a stop and start. Card needed. |
 
 1. Create an Ubuntu 24.04 VM and open TCP 80 and 443 in the cloud firewall (on Oracle: the VCN's
    security list; on AWS: the instance's security group). Point a domain at its public IP: an `A`
@@ -116,7 +116,10 @@ the ledger. Pick a real VM:
    ```
 
    It installs Node 24, pnpm and Caddy (automatic HTTPS), puts the code in `/opt/kohaku` under a
-   `kohaku` user and installs the `kohaku@<network>` systemd unit.
+   `kohaku` user and installs the `kohaku@<network>` systemd unit. Before the `A` record exists,
+   give Caddy a second name that already resolves to the server, built from its IP with dashes:
+   `sudo bash deploy/vm/setup.sh "kohaku-api.caspx.in, 16-178-199-139.sslip.io"`. Caddy serves the
+   sslip.io name at once and picks up the certificate for the real one when DNS appears.
 3. Copy `.env.testnet` to `/opt/kohaku/` (scp; it never goes through git) and run the setup script
    again to lock its permissions. Bring the ledger too: stop the backend here and copy
    `.data/kohaku-hashkey-testnet-*.sqlite*`, or restore it from the Supabase mirror (section 5).

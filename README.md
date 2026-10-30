@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://kohaku-xi.vercel.app"><b>Website</b></a> ·
+  <a href="https://kohaku.caspx.in"><b>Website</b></a> ·
   <a href="#run-it-in-one-command"><b>Run it locally</b></a> ·
   <a href="#hsp-settlement"><b>How HSP fits</b></a> ·
   <a href="docs/DEPLOY.md"><b>Deploy guide</b></a> ·
@@ -246,13 +246,13 @@ Eight agents run continuously and do real work. Each one is an on-chain identity
 | Validation registry (ERC-8004) | `0x2B8d74680719EBcA4F97e3a6B244F4297836055E` |
 | Kohaku Test USDC (EIP-3009) | `0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3` |
 
-On 27 Oct 2026 the testnet ledger held:
+On 31 Oct 2026 the testnet ledger held:
 - 8 registered agents, all with collateral;
-- 174 signed IOUs across 13 sealed epochs;
-- 18 debts settled through HSP (local gateway) and 35 creditor payouts;
+- 198 signed IOUs across 14 sealed epochs;
+- 20 debts settled through HSP (local gateway) and 39 creditor payouts;
 - 2 disputes.
 
-All of it is mirrored to Supabase.
+The backend runs on an AWS server in Sydney behind <https://kohaku.caspx.in>, and every write is mirrored to Supabase.
 
 | Network | Chain id | Status |
 |---|---|---|
@@ -449,10 +449,11 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 - [x] Website with live data only, independent verification, audit exports, operator console and intent composer
 - [x] MCP server and SDK; guest sessions for any MCP client
 - [x] Supabase mirror and restore; free-server kit; CI on every push
+- [x] Always-on backend on AWS (Sydney), website at [kohaku.caspx.in](https://kohaku.caspx.in)
 
 **In progress**
 - [ ] HashKey Merchant credentials and HSP test USDC → switch testnet to `HSP_MODE=merchant`
-- [ ] Always-on backend at `kohaku-api.caspx.in`, and the website at `kohaku.caspx.in`
+- [ ] The API on its own name, `kohaku-api.caspx.in`
 - [ ] Mainnet deployment (chain 177) after the testnet sign-off
 
 **Next**
