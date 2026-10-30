@@ -244,6 +244,8 @@ why. Newest decisions are at the bottom of each section.
   `contracts/deployments/133.json` and the README) with the fleet trading on it; mainnet uses the same
   scripts (`node scripts/deploy.mjs mainnet`) once the testnet run is signed off and the deployer is
   funded. On mainnet, epochs are longer (10 minutes) because every busy epoch costs real HSK.
+- **Update:** mainnet is not deployed for the hackathon. Kohaku runs on testnet, where HSP QA
+  serves the hackathon teams. The mainnet scripts and settings stay in the repository for later.
 
 ### 20. Stack
 
@@ -325,8 +327,9 @@ why. Newest decisions are at the bottom of each section.
 - **Kohaku:** Oracle Cloud's Always Free Arm VM (Google Cloud's e2-micro as the fallback), set up by
   `deploy/vm/setup.sh`: Node 24, Caddy for HTTPS, a `kohaku@<network>` systemd unit. Mainnet uses its
   own ports (8797/8798/8800) so both networks can share the machine.
-- **Update:** Oracle's sign-up did not go through for us, so the backend goes on AWS EC2's Free plan in
-  Mumbai (sign-up credit, no charges while on that plan), close to Demo Day. The kit is plain Ubuntu,
+- **Update:** Oracle's sign-up did not go through for us, so the backend runs on AWS EC2's Free plan
+  (sign-up credit, no charges while on that plan). Our AWS project only allows its own Region, Sydney
+  (`ap-southeast-2`), so the server is a `t3.small` there, with a fixed IP (16.178.199.139). The kit is plain Ubuntu,
   so moving to Oracle later means running the same script there and copying the env file and ledger.
   The API runs at `kohaku-api.caspx.in` and the website at `kohaku.caspx.in`, both on our own domain.
 

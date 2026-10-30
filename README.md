@@ -257,7 +257,7 @@ The backend runs on an AWS server in Sydney behind <https://kohaku.caspx.in>, an
 | Network | Chain id | Status |
 |---|---|---|
 | HashKey Chain testnet | 133 | Deployed (above), eight fleet agents trading. Addresses also in [`contracts/deployments/133.json`](contracts/deployments/133.json). |
-| HashKey Chain mainnet | 177 | Ready to deploy after the testnet sign-off. It will settle in USDC (`0x054e…8D0a`, EIP-3009). Deploying costs about 4.8 HSK at the current 500 gwei base fee. |
+| HashKey Chain mainnet | 177 | Not deployed for the hackathon. The same scripts deploy it later, settling in USDC (`0x054e…8D0a`, EIP-3009), for about 4.8 HSK at the current 500 gwei base fee. |
 | Local (anvil) | 31337 | `pnpm dev` deploys automatically. |
 
 Explorers: testnet <https://testnet-explorer.hsk.xyz> (unreachable when last checked), mainnet <https://hashkey.blockscout.com>.
@@ -449,15 +449,13 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 - [x] Website with live data only, independent verification, audit exports, operator console and intent composer
 - [x] MCP server and SDK; guest sessions for any MCP client
 - [x] Supabase mirror and restore; free-server kit; CI on every push
-- [x] Always-on backend on AWS (Sydney), website at [kohaku.caspx.in](https://kohaku.caspx.in)
+- [x] Always-on backend on AWS (Sydney) at `kohaku-api.caspx.in`, website at [kohaku.caspx.in](https://kohaku.caspx.in)
 
 **In progress**
-- [ ] HashKey Merchant credentials and HSP test USDC → switch testnet to `HSP_MODE=merchant`
-- [ ] The API on its own name, `kohaku-api.caspx.in`
-- [ ] Mainnet deployment (chain 177) after the testnet sign-off
+- [ ] HSP QA access for the server (IP allowlisting requested) and HSP test USDC → settle testnet through HSP Agentic Payment
 
 **Next**
-- More stablecoins (USDT through Permit2), cross-chain collateral (CCIP), credit lines underwritten by receipt history, and a public agent marketplace.
+- Mainnet (chain 177) after the hackathon, more stablecoins (USDT through Permit2), cross-chain collateral (CCIP), credit lines underwritten by receipt history, and a public agent marketplace.
 
 ### Business model
 
