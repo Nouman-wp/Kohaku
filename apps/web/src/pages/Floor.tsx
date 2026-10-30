@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import type { AgentSummary, IouView, JobView, PositionView } from "@kohaku/core";
 import { api, useLive, agentName, type LiveState } from "../lib/api.ts";
 import { clock, compact, pct, signedUsd, usd, score, explorerTx } from "../lib/format.ts";
-import { AgentGem, Badge, Btn, Panel, Pill, useNow, HashLink } from "../components/ui.tsx";
+import { AgentGem, Btn, Panel, Pill, useNow, HashLink } from "../components/ui.tsx";
+import { IconArrow, IconX } from "../components/icons.tsx";
 
 export default function Floor() {
   const live = useLive();
@@ -35,15 +36,17 @@ export default function Floor() {
         <div className="floor-top">
           <div className="floor-epoch">
             <div>
-              <div className="muted" style={{ fontSize: 13 }}>
-                <span className={`live-dot ${live.connected ? "" : "off"}`} />
+              <div className="floor-status" aria-live="polite">
+                <span className={`live-dot ${live.connected ? "" : "off"}`} aria-hidden />
                 {live.connected ? "Live clearing floor" : "Reconnecting…"}
               </div>
-              <div className="floor-epoch-num">Epoch {cur ?? "—"}</div>
+              <h1 className="floor-epoch-num">Epoch {cur ?? "—"}</h1>
             </div>
             <div>
-              <div className="muted" style={{ fontSize: 13 }}>intake closes in</div>
-              <div className="floor-clock">{epoch ? clock(remaining) : "--:--"}</div>
+              <div className="floor-label">{epoch?.phase === "intake" || !epoch ? "intake closes in" : epoch.phase}</div>
+              <div className="floor-clock" role="timer" aria-label="Time until intake closes">
+                {epoch ? clock(remaining) : "--:--"}
+              </div>
             </div>
           </div>
           <div className="floor-counters">
@@ -68,10 +71,10 @@ export default function Floor() {
         </div>
 
         <div className="floor-grid">
-          <Panel className="graph-panel panel-glass" title={<>Debt graph · epoch {cur ?? "—"}</>} actions={<Pill tone="muted">edge width = gross owed</Pill>}>
+          <Panel className="graph-panel" title={<>Debt graph · epoch {cur ?? "—"}</>} actions={<span className="muted" style={{ fontSize: 12 }}>line width = gross owed</span>}>
             <DebtGraph agents={live.agents} ious={epochIous} />
           </Panel>
-          <Panel className="panel-glass" title="Signed IOUs, as they arrive" actions={<Link className="text-link" style={{ fontSize: 13 }} to={cur ? `/epochs/${cur}` : "/epochs"}>Epoch detail</Link>}>
+          <Panel title="Signed IOUs, as they arrive" actions={<Link className="text-link" style={{ fontSize: 13 }} to={cur ? `/epochs/${cur}` : "/epochs"}>Epoch detail</Link>}>
             <Stream live={live} />
           </Panel>
         </div>
@@ -135,15 +138,11 @@ function DebtGraph({ agents, ious }: { agents: AgentSummary[]; ious: IouView[] }
     <svg className="graph-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Debt graph for the current epoch">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(186,156,255,.8)" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a84" />
         </marker>
-        <radialGradient id="hubglow">
-          <stop offset="0" stopColor="rgba(255,200,130,.35)" />
-          <stop offset="1" stopColor="rgba(255,159,69,0)" />
-        </radialGradient>
       </defs>
       {[1, 2, 3].map((r) => (
-        <ellipse key={r} cx={cx} cy={cy} rx={110 * r} ry={72 * r} fill="none" stroke="rgba(186,156,255,.07)" />
+        <ellipse key={r} cx={cx} cy={cy} rx={110 * r} ry={72 * r} fill="none" stroke="#1a1a1a" />
       ))}
       {edges.map((e) => {
         const a = pos.get(e.from);
@@ -159,19 +158,18 @@ function DebtGraph({ agents, ious }: { agents: AgentSummary[]; ious: IouView[] }
         const ey = b.y - (dy / len) * 34;
         return (
           <g key={`${e.from}>${e.to}`}>
-            <path className="edge" d={`M${a.x},${a.y} Q${mx},${my} ${ex},${ey}`} fill="none" stroke="rgba(186,156,255,.55)" strokeOpacity={0.35 + 0.5 * (w / 8)} strokeWidth={w} markerEnd="url(#arrow)" />
-            <path key={e.last} className="pulse" d={`M${a.x},${a.y} Q${mx},${my} ${ex},${ey}`} fill="none" stroke="#f4f0ff" strokeOpacity={0} strokeWidth={w} />
+            <path className="edge" d={`M${a.x},${a.y} Q${mx},${my} ${ex},${ey}`} fill="none" stroke="#ececea" strokeOpacity={0.18 + 0.4 * (w / 8)} strokeWidth={w} markerEnd="url(#arrow)" />
+            <path key={e.last} className="pulse" d={`M${a.x},${a.y} Q${mx},${my} ${ex},${ey}`} fill="none" stroke="#b8f34d" strokeOpacity={0} strokeWidth={w} />
           </g>
         );
       })}
-      {hub && <circle cx={cx} cy={cy} r={110} fill="url(#hubglow)" />}
       {active.map((a) => {
         const p = pos.get(a.agentId);
         if (!p) return null;
         const n = nets.get(a.agentId) ?? 0n;
         return (
           <g key={a.agentId} transform={`translate(${p.x},${p.y})`}>
-            <circle r={30} fill="rgba(6,3,23,.9)" stroke="rgba(186,156,255,.35)" />
+            <circle r={30} fill="#0a0a0a" stroke={a === hub ? "#b8f34d" : "#333"} strokeOpacity={a === hub ? 0.6 : 1} />
             <foreignObject x={-16} y={-16} width={32} height={32}>
               <AgentGem id={a.agentId} size={32} />
             </foreignObject>
@@ -215,7 +213,7 @@ function Stream({ live }: { live: LiveState }) {
           </Link>
         ) : (
           <div key={`${it.at}-${it.r.reason}`} className="stream-item refused" title={it.r.reason}>
-            <span style={{ width: 22, textAlign: "center" }}>⊘</span>
+            <IconX size={22} aria-label="Refused" />
             <div className="who">
               Refused: {agentName(live.agents, it.r.buyer)} → {agentName(live.agents, it.r.seller)} <span className="svc">{it.r.reason}</span>
             </div>
@@ -253,7 +251,7 @@ function NettingMoment({ live }: { live: LiveState }) {
   const keep = epoch.settlementTransfers;
   return (
     <Panel
-      className="netting-moment panel-glass"
+      className="netting-moment"
       title={
         <>
           Epoch {epoch.id} netted <Pill tone={epoch.phase === "sealed" ? "good" : "accent"}>{epoch.phase}</Pill>
@@ -270,9 +268,9 @@ function NettingMoment({ live }: { live: LiveState }) {
           <b>{epoch.iouCount}</b>
           <span>IOUs · {usd(epoch.grossVolume, 4)} gross</span>
         </div>
-        <div className="collapse-arrow">→</div>
+        <IconArrow size={28} className="collapse-arrow" aria-hidden />
         <div className="collapse-side">
-          <b className="cosmic-text">{epoch.settlementTransfers}</b>
+          <b className="lime">{epoch.settlementTransfers}</b>
           <span>
             transfers · {usd(epoch.netVolume, 4)} net · {pct(epoch.transferReduction)} fewer payments
           </span>
@@ -295,13 +293,13 @@ function NettingMoment({ live }: { live: LiveState }) {
               <div key={p.agentId} className="position-card">
                 <AgentGem id={p.agentId} size={26} />
                 <div>
-                  <div style={{ fontWeight: 500 }}>{agentName(live.agents, p.agentId)}</div>
+                  <div className="name">{agentName(live.agents, p.agentId)}</div>
                   <div className="state">
                     {BigInt(p.net) < 0n ? "pays via HSP · " : "receives · "}
                     {state}
                   </div>
                 </div>
-                <span className="amt">{signedUsd(p.net)}</span>
+                <span className={`amt ${BigInt(p.net) > 0n ? "pos" : ""}`}>{signedUsd(p.net)}</span>
               </div>
             );
           })}
@@ -365,7 +363,9 @@ function SettlementTicker({ live }: { live: LiveState }) {
           {list.map((s) => (
             <tr key={s.id}>
               <td>
-                <Link to={`/epochs/${s.epoch}`}>{s.epoch}</Link>
+                <Link to={`/epochs/${s.epoch}`} className="cell-link">
+                  {s.epoch}
+                </Link>
               </td>
               <td>{agentName(live.agents, s.agentId)}</td>
               <td className="num">{usd(s.amount, 4)}</td>
@@ -408,23 +408,28 @@ function ScenarioControls() {
   };
   if (!open)
     return (
-      <div className="control-bar" style={{ justifyContent: "flex-end" }}>
-        <Btn variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          Scenario runner
-        </Btn>
-        <Btn to="/intents/new" size="sm">
-          Sign an intent
-        </Btn>
+      <div className="scenario">
+        <div className="control-bar" style={{ justifyContent: "flex-end" }}>
+          <Btn variant="secondary" size="sm" onClick={() => setOpen(true)}>
+            Scenario runner
+          </Btn>
+          <Btn to="/intents/new" size="sm">
+            Sign an intent
+          </Btn>
+        </div>
       </div>
     );
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-      <div className="control-bar">
+    <div className="scenario">
+      <div className="control-bar" style={{ justifyContent: "flex-end" }}>
         <input
-          className="input"
-          style={{ width: 150, padding: "5px 10px", fontSize: 13 }}
+          className="input input-sm"
+          style={{ width: 150 }}
           type="password"
-          placeholder="admin token"
+          name="admin-token"
+          autoComplete="off"
+          aria-label="Admin token"
+          placeholder="Admin token…"
           value={token}
           onChange={(e) => {
             setToken(e.target.value);
@@ -453,9 +458,13 @@ function ScenarioControls() {
         <Btn size="sm" variant="secondary" onClick={() => run("reset")}>
           Reset
         </Btn>
+        <Btn size="sm" variant="secondary" onClick={() => setOpen(false)}>
+          Hide
+        </Btn>
       </div>
-      {msg && <div className="muted" style={{ fontSize: 12 }}>{msg}</div>}
-      <Badge icon={false}>Demo controls drive the real fleet</Badge>
+      <div className="scenario-note" aria-live="polite">
+        {msg ?? "These controls drive the real fleet."}
+      </div>
     </div>
   );
 }

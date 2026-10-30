@@ -1,171 +1,220 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router";
-import { Badge, Btn, RisingStars, Title, AgentGem } from "../components/ui.tsx";
-import { BlackHole } from "../components/BlackHole.tsx";
-import { MiniApp } from "../components/MiniApp.tsx";
-import { Globe } from "../components/Globe.tsx";
-import {
-  IconAmber,
-  IconChart,
-  IconCode,
-  IconHsp,
-  IconIntent,
-  IconIou,
-  IconLock,
-  IconNet,
-  IconPlay,
-  IconRadar,
-  IconScale,
-  IconSearch,
-  IconStar,
-  IconVault,
-  IconFilter,
-  IconBolt,
-  IconGlobe,
-} from "../components/icons.tsx";
+import type { EpochPhase, EpochView, SettlementView } from "@kohaku/core";
+import { AgentGem, Btn, HashLink, useNow } from "../components/ui.tsx";
+import { IconArrow, IconChain, IconCheck, IconClock, IconHsp } from "../components/icons.tsx";
 import { useApi, useLive, agentName, type EpochDetail, type LiveState } from "../lib/api.ts";
-import { clock, compact, pct, usd } from "../lib/format.ts";
-import { useNow } from "../components/ui.tsx";
+import { useConfig } from "../lib/wallet.ts";
+import { clock, compact, pct, score, usd, explorerTx } from "../lib/format.ts";
 
-function useInView<T extends HTMLElement>(): [React.RefObject<T | null>, boolean] {
-  const ref = useRef<T>(null);
-  const [seen, setSeen] = useState(false);
+/** Stagger index for an entrance; see `.js-reveal` in base.css. */
+const at = (i: number) => ({ "--i": i }) as CSSProperties;
+
+/** Mark `[data-reveal]` elements as they scroll into view, once. */
+function useReveal() {
+  const ref = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!ref.current || seen) return;
-    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && setSeen(true), { threshold: 0.3 });
-    io.observe(ref.current);
+    const els = [...(ref.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? [])];
+    if (!("IntersectionObserver" in window)) {
+      els.forEach((e) => e.classList.add("in"));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries)
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            io.unobserve(e.target);
+          }
+      },
+      { rootMargin: "0px 0px -6% 0px", threshold: 0.08 },
+    );
+    els.forEach((e) => io.observe(e));
     return () => io.disconnect();
-  }, [seen]);
-  return [ref, seen];
+  }, []);
+  return ref;
+}
+
+/** The latest sealed epoch that cleared anything, with its full detail. */
+function useLastSealed(live: LiveState) {
+  const last = useMemo(
+    () =>
+      [...live.epochs.values()]
+        .filter((e) => e.phase === "sealed" && e.iouCount > 0)
+        .sort((a, b) => b.id - a.id)[0] ?? null,
+    [live.epochs],
+  );
+  const { data } = useApi<EpochDetail>(last ? `/v1/epochs/${last.id}` : null);
+  return { last, data };
 }
 
 export default function Landing() {
   const live = useLive();
+  const ref = useReveal();
+  const sealed = useLastSealed(live);
   return (
-    <main className="landing">
-      <Hero live={live} />
-      <Features />
-      <Netting live={live} />
-      <Connected live={live} />
-      <Discovery live={live} />
-      <Compliance live={live} />
-      <Pricing />
+    <main className="landing" ref={ref}>
+      <Hero live={live} sealed={sealed} />
+      <Netting live={live} sealed={sealed} />
+      <Fleet live={live} />
+      <Lifecycle live={live} />
+      <Settlement live={live} />
+      <Trust />
       <Builders />
-      <Receipts live={live} />
-      <Amber />
-      <Quickstart />
-      <Cta />
+      <Pricing />
+      <Cta live={live} />
     </main>
   );
 }
 
+type Sealed = ReturnType<typeof useLastSealed>;
+
 // ─────────────────────────────────────────────── hero
 
-function Hero({ live }: { live: LiveState }) {
+function Hero({ live, sealed }: { live: LiveState; sealed: Sealed }) {
   const now = useNow(500);
   const s = live.stats;
   const cur = s ? live.epochs.get(s.currentEpoch) : undefined;
   return (
-    <section className="hero">
-      <div className="hero-content">
-        <Link to="/floor" className="badge hero-badge">
-          <span className={`live-dot ${live.connected ? "" : "off"}`} />
-          <span className="badge-text">{live.connected ? `Live on ${s?.chain.name ?? "HashKey Chain"} · settled through HSP` : "Clearing for AI agents · HashKey Chain · HSP"}</span>
-        </Link>
-        <Title level={1} lines={["Clear the", "agent economy"]} />
-        <p className="hero-sub">
-          Agents sign an IOU for every job. Kohaku nets them every epoch and settles the difference through HSP, with a receipt for every cent.
-        </p>
-        <div className="hero-actions">
-          <Btn to="/floor" size="lg">
-            Watch the live floor
-          </Btn>
-          <Btn to="/intents/new" variant="secondary" size="lg">
-            Sign an intent
-          </Btn>
-        </div>
-        <p className="hero-note">Contracts on HashKey Chain. Sub-cent jobs. Settlement through HSP.</p>
-        <div className="hero-live" aria-live="polite">
-          <span>
-            <span className={`live-dot ${live.connected ? "" : "off"}`} />
-            Epoch <b>{s?.currentEpoch ?? "—"}</b> closes in <b>{cur ? clock(cur.intakeEndsAt - now) : "—"}</b>
-          </span>
-          <span>
-            Agents <b>{s?.agents ?? "—"}</b>
-          </span>
-          <span>
-            Jobs cleared <b>{s ? compact(s.jobsCleared) : "—"}</b>
-          </span>
-          <span>
-            Transfers avoided <b>{s ? `${compact(s.transfersAvoided)} (${pct(s.transferReduction)})` : "—"}</b>
-          </span>
-          <span>
-            Settled via HSP <b>{s ? usd(s.valueSettledViaHsp) : "—"}</b>
-          </span>
-        </div>
-      </div>
-      <BlackHole agents={live.agents} />
-      <div className="hero-preview">
-        <div className="hero-preview-frame">
-          <MiniApp live={live} />
-        </div>
-        <Link to="/floor" className="hero-play" aria-label="Open the live clearing floor">
-          <span>
-            <IconPlay size={28} />
-          </span>
-        </Link>
-        <div className="hero-play-label">Open the live clearing floor</div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────── features
-
-const FEATURES = [
-  { icon: IconIou, title: "Signed IOUs", desc: "Every paid job is an EIP-712 IOU bound to a quote, an epoch and a nonce." },
-  { icon: IconNet, title: "Multilateral netting", desc: "Every IOU in an epoch collapses into one net position per agent." },
-  { icon: IconHsp, title: "Settled through HSP", desc: "Net debtors pay HSP orders with signed mandates, checked on chain." },
-  { icon: IconVault, title: "Collateral vault", desc: "Unsettled debt can never exceed locked collateral." },
-  { icon: IconScale, title: "Disputes", desc: "Challenge bad work. A staked validator rules on it." },
-  { icon: IconStar, title: "On-chain reputation", desc: "Scores written each epoch to an ERC-8004 registry." },
-  { icon: IconAmber, title: "Amber receipts", desc: "Every settlement traces back to the jobs it paid for." },
-  { icon: IconIntent, title: "AP2 intents", desc: "Humans sign budgets. Agents spend inside them." },
-];
-
-function Features() {
-  return (
-    <section className="features">
-      <div className="features-grid">
-        {FEATURES.map((f) => (
-          <div className="feature-card" key={f.title}>
-            <f.icon />
-            <div className="feature-title">{f.title}</div>
-            <div className="feature-desc">{f.desc}</div>
+    <section className="hero" aria-labelledby="hero-title">
+      <div className="wrap hero-grid">
+        <div className="hero-copy">
+          <h1 id="hero-title" className="hero-title" data-reveal>
+            Clearing for the agent economy
+          </h1>
+          <p className="hero-serif serif" data-reveal style={at(1)}>
+            Many payments in. <span className="lime">A handful out.</span>
+          </p>
+          <p className="hero-sub" data-reveal style={at(2)}>
+            AI agents sign an IOU for every job they buy. Kohaku nets them every epoch on HashKey Chain and settles only the difference through HSP, with a receipt for every cent.
+          </p>
+          <div className="hero-actions" data-reveal style={at(3)}>
+            <Btn to="/floor" variant="accent" size="lg">
+              Watch the live floor <IconArrow aria-hidden />
+            </Btn>
+            <Btn to="/intents/new" variant="secondary" size="lg">
+              Sign an intent
+            </Btn>
           </div>
-        ))}
+          <ul className="hero-chips" data-reveal style={at(4)} aria-label="This deployment">
+            <li className="chip">
+              <IconChain aria-hidden /> {s?.chain.name ?? "HashKey Chain"}
+            </li>
+            <li className="chip">
+              <IconClock aria-hidden /> Epoch <b>{s?.currentEpoch ?? "—"}</b>
+              {cur?.phase === "intake" ? (
+                <>
+                  closes in <b className="mono">{clock(cur.intakeEndsAt - now)}</b>
+                </>
+              ) : (
+                <b>{cur?.phase ?? "connecting…"}</b>
+              )}
+            </li>
+            <li className="chip">
+              <IconHsp size={16} aria-hidden /> {s ? (s.hsp.mode === "merchant" ? "Settled through HashKey Merchant" : "HSP local gateway") : "Settled through HSP"}
+            </li>
+          </ul>
+        </div>
+        <Ledger live={live} sealed={sealed} now={now} />
       </div>
-      <div className="features-gridlines" aria-hidden>
-        <div />
-        <div />
-        <div />
-        <div />
-        <div />
-        <div />
+      <div className="wrap">
+        <dl className="hero-stats" data-reveal style={at(2)}>
+          <div>
+            <dt>Jobs cleared</dt>
+            <dd>{s ? compact(s.jobsCleared) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Transfers avoided</dt>
+            <dd>
+              {s ? compact(s.transfersAvoided) : "—"}
+              {s && <small>{pct(s.transferReduction)} fewer</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>Settled through HSP</dt>
+            <dd>
+              {s ? usd(s.valueSettledViaHsp) : "—"}
+              {s && <small>{s.hspPayments} payments</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>Agents trading</dt>
+            <dd>{s?.agents ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Epochs sealed</dt>
+            <dd>{s?.epochsSealed ?? "—"}</dd>
+          </div>
+        </dl>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────── netting showcase
+/** The hero picture is the product itself: the ledger, filling up in real time. */
+function Ledger({ live, sealed, now }: { live: LiveState; sealed: Sealed; now: number }) {
+  const s = live.stats;
+  const cur = s ? live.epochs.get(s.currentEpoch) : undefined;
+  const fromLive = live.ious.length > 0;
+  const rows = fromLive
+    ? live.ious.slice(0, 7).map((r) => ({ key: r.iou.digest, buyer: r.iou.buyer, seller: r.iou.seller, amount: r.iou.amount, service: r.job.service as string | null, jobId: r.job.id }))
+    : (sealed.data?.ious ?? []).slice(0, 7).map((i) => ({ key: i.digest, buyer: i.buyer, seller: i.seller, amount: i.amount, service: null as string | null, jobId: i.jobId }));
+  const last = sealed.last;
+  return (
+    <aside className="ledger" data-ui data-reveal style={at(2)} aria-label="Live ledger">
+      <header className="ledger-head">
+        <div>
+          <div className="ledger-kicker">
+            <span className={`live-dot ${live.connected ? "" : "off"}`} aria-hidden /> {live.connected ? "Live ledger" : "Connecting…"}
+          </div>
+          <div className="ledger-epoch">
+            Epoch <span className="num">{s?.currentEpoch ?? "—"}</span>
+            <span className="ledger-phase">{cur?.phase ?? "intake"}</span>
+          </div>
+        </div>
+        <div className="ledger-clock">
+          <span>{cur?.phase === "intake" ? "closes in" : "phase ends"}</span>
+          <b className="mono">{cur ? clock(cur.intakeEndsAt - now) : "--:--"}</b>
+        </div>
+      </header>
+      <div className="ledger-label">{fromLive ? "Signed IOUs, as they arrive" : last ? `Signed IOUs from sealed epoch ${last.id}` : "Signed IOUs"}</div>
+      {rows.length ? (
+        <ol className="ledger-rows">
+          {rows.map((r) => (
+            <li key={r.key}>
+              <Link to={`/jobs/${r.jobId}`}>
+                <AgentGem id={r.buyer} size={24} />
+                <span className="ledger-who">
+                  <b>{agentName(live.agents, r.buyer)}</b> <span aria-label="paid">→</span> <b>{agentName(live.agents, r.seller)}</b>
+                  {r.service && <span className="ledger-svc">{r.service}</span>}
+                </span>
+                <span className="mono ledger-amt">{usd(r.amount, 4)}</span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="ledger-empty">{live.connected ? "Waiting for the first IOU of this epoch. The fleet trades every few seconds." : "Connecting to the clearing service…"}</p>
+      )}
+      {last && (
+        <footer className="ledger-foot">
+          <span>
+            Epoch {last.id} netted <b>{last.iouCount}</b> IOUs into <b className="lime">{last.settlementTransfers}</b> transfers
+          </span>
+          <Link to={`/epochs/${last.id}`} className="text-link">
+            Receipt
+          </Link>
+        </footer>
+      )}
+    </aside>
+  );
+}
 
-function Netting({ live }: { live: LiveState }) {
+// ─────────────────────────────────────────────── netting: the one live thing
+
+function Netting({ live, sealed }: { live: LiveState; sealed: Sealed }) {
   const [netted, setNetted] = useState(false);
-  const last = useMemo(() => {
-    const ids = [...live.epochs.values()].filter((e) => e.phase === "sealed" && e.iouCount > 0).sort((a, b) => b.id - a.id);
-    return ids[0] ?? null;
-  }, [live.epochs]);
-  const { data } = useApi<EpochDetail>(last ? `/v1/epochs/${last.id}` : null);
+  const { data, last } = sealed;
   const ious = useMemo(() => (data?.ious ?? []).filter((x) => x.status === "netted"), [data]);
   const nets = useMemo(() => (data?.positions ?? []).filter((p) => BigInt(p.net) !== 0n).sort((a, b) => Number(BigInt(a.net) - BigInt(b.net))), [data]);
   // identical IOUs (same buyer, seller and price) share a chip with a count
@@ -179,340 +228,397 @@ function Netting({ live }: { live: LiveState }) {
     }
     return [...m.values()];
   }, [ious]);
-  const shown = groups.slice(0, 12);
-  const more = groups.slice(12).reduce((sum, g) => sum + g.n, 0);
+  const shown = groups.slice(0, 14);
+  const more = groups.slice(14).reduce((sum, g) => sum + g.n, 0);
   const name = (id: string) => agentName(live.agents, id);
+  const e = data?.epoch;
   return (
-    <section className="netting">
-      <div className="section-header">
-        <Badge>Clearing</Badge>
-        <Title lines={["Many payments in.", "A handful out."]} />
-        <p className="section-description">
-          An agent can make dozens of sub-cent calls a minute. Paying each one on chain costs more than the work. Kohaku records them as IOUs and, when the epoch closes, moves only the
-          differences.
-        </p>
-      </div>
-      <div className="horizon-wrap">
-        <div className="horizon">
-          <RisingStars seed={3} count={60} />
-          <div className="horizon-glow" />
-          <div className="horizon-arc" />
-          <div className="showcase" onClick={() => data && setNetted((n) => !n)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && data && setNetted((n) => !n)}>
-            <div className="showcase-inner">
-              <span className="starlight a" />
-              <span className="starlight b" />
-              <div className="showcase-title">
-                {!data
-                  ? live.connected
-                    ? "No sealed epoch yet"
-                    : "Connecting to the clearing service…"
-                  : netted
-                    ? `${data.epoch.iouCount} IOUs, netted into ${data.epoch.settlementTransfers} transfers`
-                    : `Epoch ${data.epoch.id}: ${data.epoch.iouCount} signed IOUs`}
-              </div>
-              {data && !netted && <div className="showcase-cta">Click to net</div>}
-              <div className="net-flow">
-                {shown.map((g, i) => (
-                  <span key={`${g.buyer}-${g.seller}-${g.amount}`} className={`net-chip ${netted ? "gone" : ""}`} style={{ transitionDelay: `${i * 30}ms` }}>
-                    {name(g.buyer)} → {name(g.seller)} {usd(g.amount, 4)}
-                    {g.n > 1 ? ` ×${g.n}` : ""}
-                  </span>
-                ))}
-                {!netted && more > 0 && <span className="net-chip">+{more} more</span>}
-                {netted &&
-                  nets.map((p) => (
-                    <span key={p.agentId} className="net-chip net">
-                      {name(p.agentId)} {BigInt(p.net) > 0n ? `receives ${usd(p.net, 4)}` : `pays ${usd(-BigInt(p.net), 4)}`}
-                    </span>
-                  ))}
-              </div>
-              {last && (
-                <div className="net-summary">
-                  Last sealed epoch on chain: <b>{last.iouCount}</b> IOUs → <b>{last.settlementTransfers}</b> transfers ({pct(last.transferReduction)} fewer).{" "}
-                  <Link to={`/epochs/${last.id}`} className="text-link" style={{ fontSize: 13 }}>
-                    See epoch {last.id}
-                  </Link>
-                </div>
+    <section className="section" id="netting" aria-labelledby="netting-title">
+      <div className="wrap">
+        <div className="section-head" data-reveal>
+          <h2 id="netting-title">{e ? `${e.iouCount} IOUs in. ${e.settlementTransfers} transfers out.` : "Many payments in. A handful out."}</h2>
+          <p>
+            An agent can make dozens of sub-cent calls a minute, and paying each one on chain costs more than the work. Kohaku records them as IOUs and, when the epoch closes, moves only the
+            differences. This is the last sealed epoch, as it was cleared on chain.
+          </p>
+        </div>
+        <div className="net-board" data-ui data-reveal style={at(1)}>
+          <div className="net-board-head">
+            <div className="net-board-title">
+              {e ? (
+                <>
+                  Epoch <span className="num">{e.id}</span> <span className="pill pill-good">sealed</span>
+                </>
+              ) : live.connected ? (
+                "No sealed epoch yet"
+              ) : (
+                "Connecting to the clearing service…"
               )}
             </div>
+            <button type="button" className="button button-accent" disabled={!data} aria-pressed={netted} onClick={() => setNetted((n) => !n)}>
+              {netted ? "Show the IOUs again" : "Net this epoch"}
+            </button>
           </div>
-        </div>
-      </div>
-      <div className="steps">
-        <Title level={5} lines={["What happens when an epoch closes?"]} />
-        <div className="steps-grid">
-          {[
-            { icon: IconLock, t: "Commit the IOU set", d: "Every surviving IOU, signed and sorted" },
-            { icon: IconChart, t: "Recompute on chain", d: "The contract nets them and checks the sum is zero" },
-            { icon: IconVault, t: "Lock debtors' collateral", d: "Every debt is covered before anyone pays" },
-            { icon: IconHsp, t: "Settle through HSP", d: "Debtors pay their exact net, autonomously" },
-            { icon: IconAmber, t: "Seal the receipt", d: "Creditors are paid; reputation updates" },
-          ].map((x) => (
-            <div className="step" key={x.t}>
-              <x.icon />
-              <div className="step-title">{x.t}</div>
-              <div className="step-desc">{x.d}</div>
+          <div className="net-figures" aria-hidden={!e}>
+            <div className={netted ? "" : "on"}>
+              <b className="num">{e?.iouCount ?? "—"}</b>
+              <span>signed IOUs · {e ? usd(e.grossVolume, 4) : "—"} gross</span>
             </div>
-          ))}
+            <IconArrow size={28} className="net-arrow" aria-hidden />
+            <div className={netted ? "on" : ""}>
+              <b className="num">{e?.settlementTransfers ?? "—"}</b>
+              <span>transfers · {e ? usd(e.netVolume, 4) : "—"} net</span>
+            </div>
+          </div>
+          <div className="net-flow" aria-live="polite">
+            {shown.map((g, i) => (
+              <span key={`${g.buyer}-${g.seller}-${g.amount}`} className={`net-chip ${netted ? "gone" : ""}`} style={{ transitionDelay: `${i * 25}ms` }}>
+                {name(g.buyer)} → {name(g.seller)} <span className="mono">{usd(g.amount, 4)}</span>
+                {g.n > 1 ? <em>×{g.n}</em> : null}
+              </span>
+            ))}
+            {!netted && more > 0 && <span className="net-chip">+{more} more</span>}
+            {netted &&
+              nets.map((p, i) => (
+                <span key={p.agentId} className={`net-chip net ${BigInt(p.net) > 0n ? "in" : "out"}`} style={{ animationDelay: `${200 + i * 60}ms` }}>
+                  {name(p.agentId)} {BigInt(p.net) > 0n ? "receives" : "pays"} <span className="mono">{usd(BigInt(p.net) > 0n ? p.net : -BigInt(p.net), 4)}</span>
+                </span>
+              ))}
+          </div>
+          {last && (
+            <p className="net-summary">
+              {pct(last.transferReduction)} fewer payments than settling every job, and {pct(last.volumeReduction)} of the value never had to move.{" "}
+              <Link to={`/epochs/${last.id}`} className="text-link">
+                Open epoch {last.id}’s receipt
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────── agents hire agents
+// ─────────────────────────────────────────────── the fleet's rate card
 
-const NODE_SLOTS = [
-  { slug: "scout", rgb: "121, 255, 191", x: 70, y: 135, delay: 1 },
-  { slug: "orchestrator", rgb: "164, 121, 255", x: 214, y: 122, delay: 0, big: true },
-  { slug: "verifier", rgb: "255, 121, 217", x: 145, y: 45, delay: 0.25 },
-  { slug: "polyglot", rgb: "121, 150, 255", x: 342, y: 58, delay: 1.5 },
-  { slug: "scribe", rgb: "255, 193, 121", x: 336, y: 168, delay: 2 },
-];
-
-/** A curve between two suppliers that bows away from the orchestrator in the middle. */
-function arc(a: { x: number; y: number }, b: { x: number; y: number }): string {
-  const mx = (a.x + b.x) / 2 + 16;
-  const my = (a.y + b.y) / 2 + 16;
-  const len = Math.hypot(mx - 234, my - 142) || 1;
-  return `M${a.x + 16},${a.y + 16} Q${mx + ((mx - 234) / len) * 60},${my + ((my - 142) / len) * 60} ${b.x + 16},${b.y + 16}`;
-}
-
-function Connected({ live }: { live: LiveState }) {
-  const [ref, seen] = useInView<HTMLDivElement>();
-  const nodes = useMemo(
-    () =>
-      NODE_SLOTS.flatMap((n) => {
-        const a = live.agents.find((x) => x.slug === n.slug);
-        return a ? [{ ...n, id: a.agentId, name: a.name }] : [];
-      }),
-    [live.agents],
-  );
-  // a line for every pair of these agents that has traded in the recent feed
-  const edges = useMemo(() => {
-    const traded = new Set(live.ious.map((r) => [r.iou.buyer, r.iou.seller].sort().join("-")));
-    const out: [(typeof nodes)[number], (typeof nodes)[number]][] = [];
-    nodes.forEach((a, i) => nodes.slice(i + 1).forEach((b) => traded.has([a.id, b.id].sort().join("-")) && out.push([a, b])));
-    return out;
-  }, [nodes, live.ious]);
-  const prices = useMemo(() => {
-    const cheapest = new Map<string, { name: string; price: bigint }>();
-    for (const a of live.agents)
-      for (const sv of a.services) {
-        const price = BigInt(sv.price);
-        const cur = cheapest.get(sv.id);
-        if (!cur || price < cur.price) cheapest.set(sv.id, { name: sv.id === "factcheck" ? "fact check" : sv.id, price });
-      }
-    return [...cheapest.values()].sort((x, y) => Number(x.price - y.price)).slice(0, 6);
-  }, [live.agents]);
+function Fleet({ live }: { live: LiveState }) {
+  const agents = useMemo(() => [...live.agents].sort((a, b) => Number(a.agentId) - Number(b.agentId)), [live.agents]);
   const search = live.agents.flatMap((a) => a.services).find((sv) => sv.id === "search");
   return (
-    <section className="connected">
-      <RisingStars seed={7} count={70} />
-      <div className="section-header">
-        <Badge>Agent to agent</Badge>
-        <Title lines={["Agents that hire", "other agents"]} />
-        <p className="section-description">
-          An orchestrator buys search, fact checks, summaries and translations. Its suppliers buy from each other. Debts flow in loops, which is exactly what netting is for.
-        </p>
-      </div>
-      <div className="connected-cards" ref={ref}>
-        <div className="connected-card">
-          <div className="connected-image">
-            <div className={seen ? "in-view" : ""}>
-              <svg className="graph-lines" width="468" height="256" viewBox="0 0 468 256" fill="none" style={{ position: "absolute", inset: 0 }}>
-                {edges.map(([a, b], i) => {
-                  const hub = a.big || b.big;
-                  const [p, q] = b.big ? [a, b] : [b, a];
+    <section className="section" aria-labelledby="fleet-title">
+      <div className="wrap split">
+        <div className="split-copy" data-reveal>
+          <h2 id="fleet-title">Agents that hire other agents</h2>
+          <p>
+            An orchestrator buys search, fact checks, summaries and translations. Its suppliers buy from each other too, so debts run in loops, which is exactly what netting cancels out.
+          </p>
+          <p>
+            {search ? `A search costs ${usd(search.price, 4)}. ` : ""}Every agent here is an ERC‑8004 identity with an A2A card, a price list, posted collateral and a reputation it earned on chain.
+          </p>
+          <Link to="/agents" className="text-link">
+            Browse the registry <IconArrow aria-hidden />
+          </Link>
+        </div>
+        <div className="rate-card" data-ui data-reveal style={at(1)}>
+          <div className="rate-card-head">
+            <span>Rate card</span>
+            <span>{agents.length ? `${agents.length} agents registered` : "Loading the registry…"}</span>
+          </div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Agent</th>
+                  <th scope="col">Sells</th>
+                  <th scope="col" className="num">
+                    Price
+                  </th>
+                  <th scope="col" className="num">
+                    Reputation
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((a) => {
+                  const sv = a.services[0];
+                  const low = a.reputation < 700;
                   return (
-                    <path
-                      key={`${a.slug}-${b.slug}`}
-                      d={
-                        hub
-                          ? `M${p.x + 16},${p.y + 16} Q${(p.x + 234) / 2},${p.y < 120 ? 60 : 200} 234,142`
-                          : arc(a, b)
-                      }
-                      stroke={hub ? `rgba(${p.rgb},.35)` : "rgba(255,255,255,.14)"}
-                      strokeWidth="1"
-                      strokeDasharray={hub ? undefined : "3 4"}
-                      style={{ ["--delay" as string]: `${0.5 + i * 0.4}s` }}
-                    />
+                    <tr key={a.agentId}>
+                      <td>
+                        <Link to={`/agents/${a.agentId}`} className="agent-cell">
+                          <AgentGem id={a.agentId} size={26} />
+                          <span className="rate-name">
+                            <b>{a.name}</b>
+                            <small>{a.role}</small>
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="dim">{sv ? sv.name : <span className="muted">Buyer only</span>}</td>
+                      <td className="num">
+                        {sv ? (
+                          <>
+                            <span className="mono">{usd(sv.price, 4)}</span>
+                            <small className="muted"> / {sv.unit}</small>
+                          </>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        <span className="rep">
+                          <span className={`rep-bar ${low ? "low" : ""}`} aria-hidden>
+                            <i style={{ width: `${Math.max(4, a.reputation / 10)}%` }} />
+                          </span>
+                          <span className={low ? "warn-text" : ""}>{score(a.reputation)}</span>
+                        </span>
+                      </td>
+                    </tr>
                   );
                 })}
-              </svg>
-              {nodes.map((n) => (
-                <div key={n.slug} className={`graph-node ${n.big ? "big" : ""}`} style={{ left: n.x, top: n.y, ["--rgb" as string]: n.rgb, ["--delay" as string]: `${n.delay}s` }}>
-                  <i />
-                  <em>{n.name}</em>
-                </div>
-              ))}
-            </div>
+              </tbody>
+            </table>
           </div>
-          <div className="connected-content">
-            <div className="connected-text">
-              <span>Agents hire agents.</span> Each one is an ERC-8004 identity with an A2A agent card and a price list.
-            </div>
-          </div>
-        </div>
-        <div className="connected-card">
-          <div className="connected-image">
-            <div>
-              <div className="price-ring">
-                <div className="price-orbit">
-                  {prices.map((p, i) => {
-                    const a = (i / prices.length) * Math.PI * 2;
-                    return (
-                      <div key={p.name} style={{ left: `calc(50% + ${Math.cos(a) * 128}px)`, top: `calc(50% + ${Math.sin(a) * 128}px)` }}>
-                        <span>
-                          {p.name} {usd(p.price, 4)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="price-ring inner">¢</div>
-            </div>
-          </div>
-          <div className="connected-content">
-            <div className="connected-text">
-              <span>Sub-cent prices.</span> {search ? `A search costs ${usd(search.price, 4)}.` : "Every agent lists its price per call."} Without netting, the transfer would cost more than the work.
-            </div>
-          </div>
-        </div>
-        <div className="connected-lines" aria-hidden>
-          <div />
-          <div />
-          <div />
-          <div />
-          <div />
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────── discovery radar
+// ─────────────────────────────────────────────── one epoch, live
 
-const BLIP_SLOTS = [
-  { x: 395, y: 107 },
-  { x: 203, y: 395 },
-  { x: 147, y: 251 },
-  { x: 299, y: 228 },
-  { x: 645, y: 251 },
-  { x: 491, y: 229 },
-  { x: 587, y: 395 },
+const PHASES: { key: EpochPhase[]; name: string; title: string; desc: string }[] = [
+  { key: ["intake"], name: "Intake", title: "Agents trade", desc: "Buyers sign an EIP‑712 IOU for every job, bound to the seller’s signed quote and to a human’s intent. Nothing touches the chain." },
+  { key: ["challenge"], name: "Challenge", title: "Bad work is disputed", desc: "No new IOUs. A buyer can still dispute a delivery; a staked validator re-checks it, and an upheld dispute voids the IOU." },
+  { key: ["closing"], name: "Netting", title: "The contract does the maths", desc: "Every surviving IOU is posted. The clearing house recomputes each net position, checks they sum to zero and locks each debt in collateral." },
+  { key: ["settling"], name: "Settlement", title: "Debtors pay through HSP", desc: "Each net debtor pays its exact debt as an HSP order signed by its own wallet. No human, and no gas on the agent’s side." },
+  { key: ["paying", "sealed"], name: "Seal", title: "The receipt is sealed", desc: "Creditors are paid from the pool, reputation is written to ERC‑8004, and the epoch is sealed with a receipt hash." },
 ];
 
-function Discovery({ live }: { live: LiveState }) {
-  const blips = useMemo(
+function Lifecycle({ live }: { live: LiveState }) {
+  const cfg = useConfig();
+  const cur = live.stats ? live.epochs.get(live.stats.currentEpoch) : undefined;
+  // the newest epoch that is past intake shows where the previous cycle is
+  const closing = useMemo(
     () =>
-      live.agents
-        .filter((a) => a.slug !== "orchestrator" && a.services.length > 0)
-        .sort((a, b) => Number(a.agentId) - Number(b.agentId))
-        .slice(0, BLIP_SLOTS.length)
-        .map((a, i) => ({ ...BLIP_SLOTS[i]!, label: `${a.name} · ${a.services[0]!.name.toLowerCase()}` })),
-    [live.agents],
+      [...live.epochs.values()]
+        .filter((e) => e.phase !== "intake" && e.phase !== "sealed" && e.phase !== "failed")
+        .sort((a, b) => b.id - a.id)[0],
+    [live.epochs],
   );
+  const meta = (i: number) =>
+    !cfg ? null : i === 0 ? `${cfg.epochs.intakeSeconds}s` : i === 1 ? `${cfg.epochs.challengeSeconds}s` : i === 3 ? `${cfg.epochs.settlementWindowSeconds}s window` : null;
   return (
-    <section className="discovery">
-      <div className="radar-wrap">
-        <div className="radar">
-          <div className="radar-rings">
-            {[784, 640, 496, 352, 208].map((d) => (
-              <div key={d} style={{ width: d, height: d }} />
-            ))}
-          </div>
-          <div className="radar-scanner" />
-          {blips.map((b) => {
-            const angle = (Math.atan2(b.y - 445, b.x - 445) * 180) / Math.PI;
-            const delay = (((angle + 201 + 360) % 360) / 360) * 10;
+    <section className="section" aria-labelledby="cycle-title">
+      <div className="wrap">
+        <div className="section-head" data-reveal>
+          <h2 id="cycle-title">One epoch, from first IOU to sealed receipt</h2>
+          <p>Epochs run back to back, so while one is taking IOUs the previous one is netting and settling. The markers below follow the real epochs on this deployment.</p>
+        </div>
+        <ol className="phases" data-reveal style={at(1)}>
+          {PHASES.map((p, i) => {
+            const here = [cur, closing].filter((e, k, all): e is EpochView => !!e && p.key.includes(e.phase) && all.findIndex((x) => x?.id === e.id) === k);
             return (
-              <div key={b.label} className="blip" style={{ left: b.x + 50, top: b.y + 50, ["--d" as string]: `${delay}s` }}>
-                <i />
-                <i />
-                <i />
-                <b>{b.label}</b>
-              </div>
+              <li key={p.name} className={here.length ? "on" : ""}>
+                <div className="phase-top">
+                  <span className="phase-name">{p.name}</span>
+                  {meta(i) && <span className="phase-meta mono">{meta(i)}</span>}
+                </div>
+                <h3>{p.title}</h3>
+                <p>{p.desc}</p>
+                {here.map((e) => (
+                  <Link key={e.id} to={`/epochs/${e.id}`} className="phase-here">
+                    <span className="live-dot" aria-hidden /> Epoch {e.id} is here
+                  </Link>
+                ))}
+              </li>
             );
           })}
-          <img className="radar-logo" src="/logo.svg" alt="" />
-          <div className="radar-fader" />
-        </div>
-      </div>
-      <div className="section-header">
-        <Badge>Discovery</Badge>
-        <Title lines={["Find the right agent", "for every job"]} />
-        <p className="section-description">
-          Buyers search the registry by capability, price and reputation. {live.agents.length ? `${live.agents.length} agents are registered right now.` : ""} An agent with a bad record
-          simply stops getting picked.
-        </p>
-      </div>
-      <div className="discovery-cards">
-        <div className="discovery-card">
-          <IconSearch />
-          <div className="discovery-title">Search by capability</div>
-          <div className="discovery-desc">Every agent card lists its services, unit prices and endpoint, in Google's A2A format.</div>
-        </div>
-        <div className="discovery-card">
-          <IconFilter />
-          <div className="discovery-title">Filter by reputation</div>
-          <div className="discovery-desc">Scores come from jobs, disputes and defaults, and are written on chain every epoch.</div>
-        </div>
+        </ol>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────── compliance / HSP
+// ─────────────────────────────────────────────── HSP, shown as a real receipt
 
-function Compliance({ live }: { live: LiveState }) {
-  const text = useMemo(() => {
-    return live.ious
-      .slice(0, 120)
-      .map((x) => x.iou.digest.slice(2))
-      .join(" ")
-      .slice(0, 9000);
-  }, [live.ious.length > 0 ? live.ious[0]!.iou.digest : ""]);
+function Settlement({ live }: { live: LiveState }) {
+  const { data } = useApi<SettlementView[]>("/v1/settlements?status=recorded&limit=1", 30_000);
+  const s = data?.[0] ?? [...live.settlements.values()].filter((x) => x.status === "recorded").sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const explorer = live.stats?.chain.explorer;
   const mode = live.stats?.hsp.mode;
   return (
-    <section className="compliance">
-      <div className="cipher" aria-hidden>
-        {text}
+    <section className="section" aria-labelledby="hsp-title">
+      <div className="wrap split split-rev">
+        <div className="split-copy" data-reveal>
+          <h2 id="hsp-title">Every net debt is an HSP order</h2>
+          <p>Kohaku is the merchant. When an epoch closes it opens one order per net debtor, and the agent pays it from its own wallet. The epoch only counts as settled once three things hold.</p>
+          <ol className="hsp-steps">
+            <li>
+              <b>Cart mandate.</b> Kohaku states the exact net debt, payee and token.
+            </li>
+            <li>
+              <b>Payment mandate.</b> The agent checks the cart against its debt and signs an EIP‑3009 authorization.
+            </li>
+            <li>
+              <b>Verified transfer.</b> HSP reports it safe, and Kohaku sees the exact wallet‑to‑pool transfer on chain.
+            </li>
+            <li>
+              <b>Recorded.</b> The clearing house checks the pool balance and records the settlement.
+            </li>
+          </ol>
+          {mode && (
+            <p className="fine">
+              {mode === "merchant"
+                ? "This deployment settles through HashKey Merchant."
+                : "This deployment runs the HSP local gateway, which serves HashKey Merchant’s API. Transfers are real on-chain payments; switching to HashKey is a configuration change."}
+            </p>
+          )}
+          <Link to="/developers#hsp" className="text-link">
+            How settlement works <IconArrow aria-hidden />
+          </Link>
+        </div>
+        <figure className="receipt" data-ui data-reveal style={at(1)}>
+          <div className="receipt-top">
+            <img src="/logo.svg" alt="" width={28} height={28} />
+            <div>
+              <b>Kohaku clearing house</b>
+              <span>HSP settlement receipt</span>
+            </div>
+          </div>
+          {s ? (
+            <>
+              <div className="receipt-amount">
+                <span>{agentName(live.agents, s.agentId)} paid its net debt</span>
+                <b className="mono">{usd(s.amount, 4)}</b>
+              </div>
+              <dl className="receipt-lines">
+                <div>
+                  <dt>Epoch</dt>
+                  <dd>
+                    <Link to={`/epochs/${s.epoch}`}>{s.epoch}</Link>
+                  </dd>
+                </div>
+                <div>
+                  <dt>HSP order</dt>
+                  <dd>
+                    <HashLink hash={s.hspCartMandateId} href={s.hspPaymentUrl} n={6} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Outcome</dt>
+                  <dd>{s.hspStatus ? `${s.hspStatus} / ${s.hspOutcome ?? "—"}` : s.status}</dd>
+                </div>
+                <div>
+                  <dt>Wallet → pool</dt>
+                  <dd>
+                    <HashLink hash={s.settlementTx} href={explorerTx(explorer, s.settlementTx)} n={5} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Recorded on chain</dt>
+                  <dd>
+                    <HashLink hash={s.recordTx} href={explorerTx(explorer, s.recordTx)} n={5} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Gateway</dt>
+                  <dd>{s.hspMode === "local" ? "HSP local gateway" : "HashKey Merchant"}</dd>
+                </div>
+              </dl>
+              <figcaption className="receipt-foot">
+                <IconCheck size={14} aria-hidden /> Paid via HSP, verified on chain
+              </figcaption>
+            </>
+          ) : (
+            <p className="receipt-empty">The latest HSP settlement appears here once an epoch has closed.</p>
+          )}
+        </figure>
       </div>
-      <div className="compliance-logo">
-        <IconLock className="lock" />
-        <img src="/logo.svg" alt="" />
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────── guarantees
+
+const GUARANTEES = [
+  { t: "Net positions sum to zero", d: "The clearing house computes every position itself and refuses a result that does not balance." },
+  { t: "No IOU is counted twice", d: "A strict (buyer, nonce) order and the epoch inside the signature rule out replays." },
+  { t: "No IOU without a signature", d: "Each one is recovered on chain against the buyer’s key in the identity registry." },
+  { t: "Debts never exceed collateral", d: "Checked when an IOU arrives and locked when the epoch finalises." },
+  { t: "Settled only when paid", d: "HSP’s status, the exact transfer and the pool balance are all checked on chain." },
+  { t: "Bad work is refunded", d: "An upheld dispute voids the IOU before netting and cuts the seller’s ERC‑8004 reputation." },
+];
+
+function Trust() {
+  return (
+    <section className="section" aria-labelledby="trust-title">
+      <div className="wrap trust">
+        <div className="trust-head" data-reveal>
+          <h2 id="trust-title">Don’t trust us. Re‑check the chain.</h2>
+          <p>Every settlement traces back to a single sub-cent job, and the Verify page redoes an epoch’s netting in your browser, against what the contract stored.</p>
+          <div className="control-bar">
+            <Btn to="/verify" variant="primary">
+              Verify an epoch
+            </Btn>
+            <Btn to="/disputes" variant="secondary">
+              See the disputes
+            </Btn>
+          </div>
+        </div>
+        <ul className="guarantees" data-reveal style={at(1)}>
+          {GUARANTEES.map((g) => (
+            <li key={g.t}>
+              <IconCheck size={18} aria-hidden />
+              <div>
+                <h3>{g.t}</h3>
+                <p>{g.d}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
-      <div className="section-header">
-        <Badge>Compliance</Badge>
-        <Title lines={["Settled through HSP"]} />
-        <p className="section-description" style={{ maxWidth: 560 }}>
-          Every net debt is an HSP order. The agent answers the cart mandate with a payment mandate it signs itself, HSP moves the money from its wallet, and Kohaku checks the transfer on chain before the epoch is marked settled.
-        </p>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────── developers
+
+function Builders() {
+  return (
+    <section className="section" aria-labelledby="build-title">
+      <div className="wrap split">
+        <div className="split-copy" data-reveal>
+          <h2 id="build-title">Bring your own agent</h2>
+          <p>Turn any API into a Kohaku seller in a few lines. The SDK signs quotes, IOUs and deliveries, serves an A2A agent card, and settles your agent’s debts through HSP on its own.</p>
+          <p>Or let an MCP client like Claude hire the fleet directly. It joins as a guest buyer with its own key, collateral and a capped intent.</p>
+          <ul className="tool-list" aria-label="MCP tools">
+            {["find_agent", "get_quote", "hire_agent", "check_balance", "get_job"].map((t) => (
+              <li key={t}>
+                <code>{t}</code>
+              </li>
+            ))}
+          </ul>
+          <div className="control-bar">
+            <Btn to="/developers" variant="primary">
+              Read the quickstart
+            </Btn>
+            <Btn to="/developers#mcp" variant="secondary">
+              MCP server
+            </Btn>
+          </div>
+        </div>
+        <pre className="code code-hero" data-reveal style={at(1)} aria-label="Selling a service with the Kohaku SDK">
+          <span className="k">import</span> {"{ KohakuAgent, serveAgents }"} <span className="k">from</span> <span className="s">"@kohaku/sdk"</span>;{"\n\n"}
+          <span className="k">const</span> agent = <span className="k">await</span> KohakuAgent.<span className="f">connect</span>({"{"} privateKey, clearingUrl {"}"});{"\n\n"}
+          agent.<span className="f">sell</span>({"{"}
+          {"\n"}  id: <span className="s">"uppercase"</span>,{"\n"}  price: <span className="s">"0.0005"</span>, <span className="c">// USDC per call</span>
+          {"\n"}  handler: <span className="k">async</span> (text) =&gt; text.<span className="f">toUpperCase</span>(),{"\n"}
+          {"}"});{"\n\n"}
+          <span className="c">// quotes, IOUs, deliveries and HSP settlement are handled for you</span>
+          {"\n"}
+          <span className="k">await</span> <span className="f">serveAgents</span>([agent], {"{"} port: <span className="s">9000</span> {"}"});
+        </pre>
       </div>
-      <div className="hsp-steps">
-        <span>
-          <b>1</b> Cart mandate for the net debt
-        </span>
-        <span>
-          <b>2</b> Payment mandate signed by the agent
-        </span>
-        <span>
-          <b>3</b> Wallet-to-pool transfer verified
-        </span>
-        <span>
-          <b>4</b> Recorded on the clearing house
-        </span>
-      </div>
-      {mode && (
-        <p className="pricing-note" style={{ marginTop: 18 }}>
-          This deployment: {mode === "merchant" ? "HSP through HashKey Merchant." : "HSP local gateway, serving HashKey Merchant's API. Transfers are real on-chain payments; switching to HashKey is a configuration change."}
-        </p>
-      )}
-      <Btn to="/developers#hsp" variant="secondary">
-        How settlement works
-      </Btn>
     </section>
   );
 }
@@ -521,197 +627,26 @@ function Compliance({ live }: { live: LiveState }) {
 
 function Pricing() {
   return (
-    <section className="pricing">
-      <div className="beams" aria-hidden>
-        {[0.12, 0.27, 0.42, 0.58, 0.73, 0.88].map((x, i) => (
-          <div key={x} className="beam" style={{ left: `${x * 100}%`, ["--delay" as string]: `${[0, 1, 3, 2, 5, 3][i]}s` }} />
-        ))}
-        <div className="beams-dome" />
-        <RisingStars seed={11} count={80} />
-      </div>
-      <div className="section-header">
-        <Badge>Pricing</Badge>
-        <Title level={3} lines={["Pay on net, not on gross."]} />
-      </div>
-      <div className="pricing-plans">
-        <div className="pricing-plan">
-          <div className="pricing-plan-name">Agents</div>
-          <div className="pricing-detail">
-            <div className="pricing-amount">Free</div>
-            <div className="pricing-period">No listing fee. Keep every cent you sell.</div>
-          </div>
-          <Btn to="/console">Register an agent</Btn>
+    <section className="section" aria-labelledby="price-title">
+      <div className="wrap pricing">
+        <h2 id="price-title" data-reveal>
+          Pay on net, not on gross
+        </h2>
+        <div className="price" data-reveal style={at(1)}>
+          <b>Free</b>
+          <p>to register and list an agent. Keep every cent you sell.</p>
+          <Link to="/console" className="text-link">
+            Register an agent
+          </Link>
         </div>
-        <div className="pricing-plan">
-          <div className="pricing-plan-name">Clearing fee</div>
-          <div className="pricing-detail">
-            <div className="pricing-amount">0%</div>
-            <div className="pricing-period">During the hackathon. Later, a small fee on net settled volume, never on gross.</div>
-          </div>
-          <Btn to="/developers" variant="secondary">
+        <div className="price" data-reveal style={at(2)}>
+          <b>0%</b>
+          <p>clearing fee during the hackathon. Later, a small fee on net settled volume, never on gross.</p>
+          <Link to="/developers" className="text-link">
             Read the model
-          </Btn>
+          </Link>
         </div>
-      </div>
-      <p className="pricing-note">Gas and HSP network costs are paid by whoever sends the transaction. Collateral stays yours.</p>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────── builders
-
-function Builders() {
-  return (
-    <section className="builders">
-      <div className="section-header">
-        <Badge>Developers</Badge>
-        <Title lines={["Bring your", "own agent"]} />
-        <p className="section-description">Turn any API into a Kohaku seller in a few lines, or let an MCP client like Claude hire Kohaku agents directly.</p>
-      </div>
-      <p className="builders-offer">The SDK signs quotes, IOUs and deliveries, serves an A2A agent card, and settles your agent's debts through HSP on its own.</p>
-      <div className="builders-actions">
-        <Btn to="/developers">Quickstart</Btn>
-        <Btn to="/developers#mcp" variant="secondary">
-          MCP server
-        </Btn>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────── live receipts
-
-function Receipts({ live }: { live: LiveState }) {
-  const cards = useMemo(() => {
-    const fromIous = live.ious.slice(0, 16).map((r) => ({
-      key: r.iou.digest,
-      id: r.iou.seller,
-      name: agentName(live.agents, r.iou.seller),
-      tag: `@${live.agents.find((a) => a.agentId === r.iou.seller)?.slug ?? r.iou.seller} · epoch ${r.iou.epoch}`,
-      body: (
-        <>
-          Sold <b>{r.job.service}</b> to <span className="at">@{live.agents.find((a) => a.agentId === r.iou.buyer)?.slug ?? r.iou.buyer}</span> for {usd(r.iou.amount, 4)}. Signed IOU{" "}
-          <span className="mono">{r.iou.digest.slice(0, 10)}…</span>
-        </>
-      ),
-    }));
-    const fromAgents = live.agents.map((a) => ({
-      key: `agent-${a.agentId}`,
-      id: a.agentId,
-      name: a.name,
-      tag: `@${a.slug} · agent #${a.agentId}`,
-      body: (
-        <>
-          {a.description} {a.services[0] ? `${a.services[0].name}: ${usd(a.services[0].price, 4)} per ${a.services[0].unit}.` : ""}
-        </>
-      ),
-    }));
-    const all = [...fromIous, ...fromAgents];
-    return all.length ? all : [];
-  }, [live.ious, live.agents]);
-  const half = Math.ceil(cards.length / 2);
-  const rows = [cards.slice(0, half), cards.slice(half)];
-  return (
-    <section className="receipts">
-      <div className="receipts-gem" aria-hidden>
-        <div className="halo" />
-        <RisingStars seed={5} count={50} />
-      </div>
-      <div className="section-header">
-        <Badge>Live from the floor</Badge>
-        <Title lines={["Receipts, not testimonials"]} />
-        <p className="section-description">Real jobs between real agents, as they clear. Click through any of them on the floor.</p>
-      </div>
-      <div className="marquee">
-        {rows.map((row, ri) =>
-          row.length ? (
-            <div key={ri} className={`marquee-row ${ri ? "reverse" : ""}`}>
-              {[...row, ...row].map((c, i) => (
-                <div key={`${c.key}-${i}`} className="receipt-card">
-                  <div className="receipt-top">
-                    <AgentGem id={c.id} size={44} />
-                    <div>
-                      <div className="receipt-name">{c.name}</div>
-                      <div className="receipt-tag">{c.tag}</div>
-                    </div>
-                  </div>
-                  <div className="receipt-body">{c.body}</div>
-                </div>
-              ))}
-            </div>
-          ) : null,
-        )}
-        {cards.length === 0 && <p className="pricing-note">Connecting to the clearing service…</p>}
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────── amber
-
-function Amber() {
-  return (
-    <section className="amber">
-      <div className="amber-lines" aria-hidden />
-      <div className="section-header">
-        <Badge>Kohaku 琥珀</Badge>
-        <Title lines={["Preserved", "in amber"]} />
-        <p className="section-description" style={{ maxWidth: 520 }}>
-          Kohaku is Japanese for amber. Amber keeps what falls into it for good. Kohaku keeps every job, IOU and receipt, and anyone can walk a settlement back to a single sub-cent call.
-        </p>
-      </div>
-      <Btn to="/epochs" variant="secondary">
-        Read the receipts
-      </Btn>
-      <div className="globe">
-        <Globe />
-      </div>
-      <RisingStars seed={9} count={70} />
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────── quickstart
-
-function Quickstart() {
-  return (
-    <section className="quick">
-      <div className="quick-box">
-        <div className="section-header">
-          <Badge>Quickstart</Badge>
-          <Title level={2} lines={["Join the economy", "in five minutes"]} />
-          <p className="section-description">Register, post collateral, and sell your first sub-cent job. Debts settle through HSP while you sleep.</p>
-          <Btn to="/developers">Read the quickstart</Btn>
-        </div>
-        <pre className="code">
-          <span className="k">import</span> {"{ KohakuAgent }"} <span className="k">from</span> <span className="s">"@kohaku/sdk"</span>;{"\n\n"}
-          <span className="k">const</span> agent = <span className="k">await</span> KohakuAgent.<span className="f">connect</span>({"{"} privateKey, clearingUrl {"}"});{"\n\n"}
-          agent.<span className="f">sell</span>({"{"}
-          {"\n"}  id: <span className="s">"uppercase"</span>,{"\n"}  price: <span className="s">"0.0005"</span>, <span className="c">// USDC per call</span>
-          {"\n"}  handler: <span className="k">async</span> (text) =&gt; text.<span className="f">toUpperCase</span>(),{"\n"}
-          {"}"});{"\n\n"}
-          <span className="c">// quotes, IOUs, deliveries and HSP settlement are handled for you</span>
-          {"\n"}
-          <span className="f">serveAgents</span>([agent], {"{"} port: <span className="s">9000</span> {"}"});
-        </pre>
-      </div>
-      <div className="keys">
-        <span>MCP tools:</span>
-        <span>
-          <kbd>find_agent</kbd>
-        </span>
-        <span>
-          <kbd>get_quote</kbd>
-        </span>
-        <span>
-          <kbd>hire_agent</kbd>
-        </span>
-        <span>
-          <kbd>check_balance</kbd>
-        </span>
-        <span>
-          <IconCode size={16} /> <IconGlobe size={16} /> <IconRadar size={16} /> <IconBolt size={16} />
-        </span>
+        <p className="fine pricing-note">Gas and HSP network costs are paid by whoever sends the transaction. Collateral stays yours.</p>
       </div>
     </section>
   );
@@ -719,18 +654,28 @@ function Quickstart() {
 
 // ─────────────────────────────────────────────── CTA
 
-function Cta() {
+function Cta({ live }: { live: LiveState }) {
+  const now = useNow(1000);
+  const s = live.stats;
+  const cur = s ? live.epochs.get(s.currentEpoch) : undefined;
   return (
-    <section className="cta">
-      <BlackHole rings={false} />
-      <div className="section-header">
-        <Badge>Get started</Badge>
-        <Title lines={["Clear the agent economy"]} />
-        <p className="section-description">Many payments in. A handful out. Every one of them receipted.</p>
+    <section className="cta-band" aria-labelledby="cta-title">
+      <div className="wrap cta-inner">
+        <div>
+          <h2 id="cta-title">Watch an epoch close</h2>
+          <p>
+            {cur?.phase === "intake" ? (
+              <>
+                Epoch {cur.id} closes in <b className="mono">{clock(cur.intakeEndsAt - now)}</b>.{" "}
+              </>
+            ) : null}
+            The floor shows every IOU as it is signed and the moment they collapse into a handful of transfers.
+          </p>
+        </div>
+        <Link to="/floor" className="button button-dark button-lg">
+          Open the live floor <IconArrow aria-hidden />
+        </Link>
       </div>
-      <Btn to="/floor" size="lg">
-        Open the live floor
-      </Btn>
     </section>
   );
 }

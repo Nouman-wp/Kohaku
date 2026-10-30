@@ -5,7 +5,7 @@ import { IOU_TYPES, iouDigest, net } from "@kohaku/core";
 import { clearingHouseAbi, identityRegistryAbi } from "@kohaku/core/abis";
 import { API, api, useLive } from "../lib/api.ts";
 import { pct, usd } from "../lib/format.ts";
-import { Badge, Btn, Panel, Pill } from "../components/ui.tsx";
+import { Btn, PageHead, Panel, Pill } from "../components/ui.tsx";
 import { IconCheck, IconX } from "../components/icons.tsx";
 
 interface Config {
@@ -121,44 +121,57 @@ export default function Verify() {
   const allOk = rows?.every((r) => r.ok);
   return (
     <main className="page">
-      <div className="page-inner" style={{ maxWidth: 980 }}>
-        <div className="page-head">
-          <div>
-            <Badge>Verify</Badge>
-            <h1 className="page-title">Don't trust us. Re-check the chain.</h1>
-            <p className="page-sub">
-              Your browser fetches the epoch's published IOU set, recovers every signature, redoes the netting with the same code the contract mirrors, and compares the result with what is stored
-              on chain, read straight from the RPC.
-            </p>
-          </div>
-        </div>
+      <div className="page-inner" style={{ maxWidth: 1000 }}>
+        <PageHead
+          title="Don’t trust us. Re‑check the chain."
+          sub="Your browser fetches the epoch’s published IOU set, recovers every signature, redoes the netting with the same code the contract mirrors, and compares the result with what is stored on chain, read straight from the RPC."
+        />
         <Panel>
-          <div className="toolbar" style={{ marginBottom: 0 }}>
-            <input className="input" style={{ maxWidth: 160 }} placeholder="Epoch id" value={epoch} onChange={(e) => setEpoch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run(epoch)} />
-            <input className="input" style={{ flex: 1, minWidth: 260 }} placeholder="RPC URL" value={rpc} onChange={(e) => setRpc(e.target.value)} />
-            <Btn onClick={() => run(epoch)} disabled={running || !epoch}>
+          <form
+            className="verify-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(epoch);
+            }}
+          >
+            <div className="field">
+              <label htmlFor="verify-epoch">Epoch</label>
+              <input id="verify-epoch" className="input" name="epoch" inputMode="numeric" autoComplete="off" placeholder="e.g. 12" value={epoch} onChange={(e) => setEpoch(e.target.value)} />
+            </div>
+            <div className="field grow">
+              <label htmlFor="verify-rpc">RPC URL</label>
+              <input id="verify-rpc" className="input mono" name="rpc" type="url" autoComplete="off" spellCheck={false} placeholder="https://…" value={rpc} onChange={(e) => setRpc(e.target.value)} />
+            </div>
+            <Btn type="submit" disabled={running || !epoch}>
               {running ? "Verifying…" : "Verify"}
             </Btn>
-          </div>
+          </form>
           {sealed.length > 0 && (
-            <div className="muted" style={{ fontSize: 13, marginTop: 12 }}>
-              Recent sealed epochs:{" "}
+            <div className="verify-recent">
+              <span className="muted">Recent sealed epochs</span>
               {sealed.map((e) => (
-                <button key={e.id} className="accent" style={{ marginRight: 10 }} onClick={() => (setEpoch(String(e.id)), run(String(e.id)))}>
+                <button key={e.id} type="button" className="choice" aria-pressed={epoch === String(e.id)} onClick={() => (setEpoch(String(e.id)), run(String(e.id)))}>
                   {e.id}
                 </button>
               ))}
             </div>
           )}
         </Panel>
+        {running && !rows && (
+          <Panel>
+            <p className="dim" aria-live="polite">
+              Reading the chain and recovering signatures…
+            </p>
+          </Panel>
+        )}
         {rows && (
-          <Panel className="panel-glass" title={<span className="big-ok">{allOk ? "Everything checks out" : "Something does not match"}</span>} actions={<Pill tone={allOk ? "good" : "warn"}>{allOk ? "verified" : "failed"}</Pill>}>
+          <Panel title={<span className="big-ok">{allOk ? "Everything checks out" : "Something does not match"}</span>} actions={<Pill tone={allOk ? "good" : "warn"}>{allOk ? "verified" : "failed"}</Pill>}>
             {summary && <p className="dim" style={{ marginBottom: 10 }}>{summary}</p>}
             <div className="checks">
               {rows.map((r) => (
                 <div className="row" key={r.name}>
-                  <span className={`check ${r.ok ? "" : "bad"}`}>{r.ok ? <IconCheck /> : <IconX />}</span>
-                  <b style={{ fontWeight: 500 }}>{r.name}</b>
+                  <span className={`check ${r.ok ? "" : "bad"}`}>{r.ok ? <IconCheck aria-label="Passed" /> : <IconX aria-label="Failed" />}</span>
+                  <b style={{ fontWeight: 600 }}>{r.name}</b>
                   <span className="dim mono" style={{ fontSize: 12 }}>
                     {r.detail}
                   </span>

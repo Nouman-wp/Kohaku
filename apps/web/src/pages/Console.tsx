@@ -6,7 +6,7 @@ import { collateralVaultAbi, erc20Abi, identityRegistryAbi, mockUsdcAbi } from "
 import { API, api, useLive } from "../lib/api.ts";
 import { usd, short, explorerTx } from "../lib/format.ts";
 import { publicClientFor, sendTx, useConfig, useWallet, type KohakuConfig, type WalletState } from "../lib/wallet.ts";
-import { AgentGem, Badge, Btn, Empty, HashLink, Panel, Pill, Stat } from "../components/ui.tsx";
+import { AgentGem, Btn, Empty, HashLink, PageHead, Panel, Pill, Stat, Stats } from "../components/ui.tsx";
 import { IntentRow } from "./Agents.tsx";
 
 export default function Console() {
@@ -30,37 +30,44 @@ export default function Console() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="page-head">
-          <div>
-            <Badge>Operator console</Badge>
-            <h1 className="page-title">Your agents, their money</h1>
-            <p className="page-sub">Register agents, post and withdraw collateral, sign or revoke intents, and see live exposure and earnings. Every action is a transaction or a signature from your wallet.</p>
-          </div>
-          <div className="control-bar">
-            {!wallet.address ? (
-              <Btn onClick={wallet.connect}>Connect wallet</Btn>
-            ) : (
-              <Pill tone="accent">
-                <span className="live-dot" /> {short(wallet.address, 4)}
-              </Pill>
-            )}
-            {wrongChain && (
-              <Btn variant="secondary" onClick={wallet.switchChain}>
-                Switch to {cfg?.chain.name}
-              </Btn>
-            )}
-          </div>
+        <PageHead
+          title="Operator console"
+          sub="Register agents, post and withdraw collateral, sign or revoke intents, and see live exposure and earnings. Every action is a transaction or a signature from your wallet."
+          actions={
+            <>
+              {!wallet.address ? (
+                <Btn variant="accent" onClick={wallet.connect}>
+                  Connect wallet
+                </Btn>
+              ) : (
+                <span className="chip">
+                  <span className="live-dot" aria-hidden /> <span className="mono">{short(wallet.address, 4)}</span>
+                </span>
+              )}
+              {wrongChain && (
+                <Btn variant="secondary" onClick={wallet.switchChain}>
+                  Switch to {cfg?.chain.name}
+                </Btn>
+              )}
+            </>
+          }
+        />
+        <div aria-live="polite">
+          {wallet.error && (
+            <div className="notice warn" style={{ marginBottom: 16 }}>
+              {wallet.error}
+            </div>
+          )}
+          {msg && (
+            <div className={`notice ${msg.bad ? "warn" : ""}`} style={{ marginBottom: 16 }}>
+              {msg.text} {msg.tx && <HashLink hash={msg.tx} href={explorerTx(cfg?.chain.explorer, msg.tx)} n={6} />}
+            </div>
+          )}
         </div>
-        {wallet.error && <div className="notice warn" style={{ marginBottom: 16 }}>{wallet.error}</div>}
-        {msg && (
-          <div className={`notice ${msg.bad ? "warn" : ""}`} style={{ marginBottom: 16 }}>
-            {msg.text} {msg.tx && <HashLink hash={msg.tx} href={explorerTx(cfg?.chain.explorer, msg.tx)} n={6} />}
-          </div>
-        )}
         {!wallet.address && (
-          <Panel className="panel-glass">
-            <p className="dim">
-              Connect the wallet that operates your agents. Judges: the public fleet is operated by Kohaku's own keys, so you can browse everything without connecting, or register an agent of your
+          <Panel>
+            <p className="dim" style={{ maxWidth: 720 }}>
+              Connect the wallet that operates your agents. Judges: the public fleet is operated by Kohaku’s own keys, so you can browse everything without connecting, or register an agent of your
               own on {cfg?.chain.name ?? "the network"}.
             </p>
           </Panel>
@@ -68,7 +75,7 @@ export default function Console() {
         {wallet.address && cfg && wallet.client && (
           <>
             <TokenBar cfg={cfg} wallet={wallet} act={act} />
-            <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="grid grid-2">
               <RegisterAgent cfg={cfg} wallet={wallet} act={act} />
               <Panel title={`Agents you operate (${mine.length})`}>
                 {mine.map((a) => (
@@ -100,7 +107,7 @@ function TokenBar({ cfg, wallet, act }: { cfg: KohakuConfig; wallet: WalletState
     return () => clearInterval(t);
   }, [wallet.address]);
   return (
-    <div className="grid grid-3">
+    <Stats>
       <Stat label="Your stablecoin balance" value={bal === null ? "—" : usd(bal)} hint={cfg.deployment.mockToken ? "mock token on this network" : cfg.deployment.token} />
       <Stat label="Network" value={cfg.chain.name} hint={`chain id ${cfg.chain.id}`} />
       <div className="stat" style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -114,7 +121,7 @@ function TokenBar({ cfg, wallet, act }: { cfg: KohakuConfig; wallet: WalletState
           </span>
         )}
       </div>
-    </div>
+    </Stats>
   );
 }
 
@@ -125,13 +132,33 @@ function RegisterAgent({ cfg, wallet, act }: { cfg: KohakuConfig; wallet: Wallet
     <Panel title="Register an agent">
       <div className="grid" style={{ gap: 12 }}>
         <div className="field">
-          <label>Agent card or ERC-8004 registration URL</label>
-          <input className="input" placeholder="https://your-agent.example/registration.json" value={uri} onChange={(e) => setUri(e.target.value)} />
-          <small>Serve it with the SDK's serveAgents(); it lists your services and prices.</small>
+          <label htmlFor="reg-uri">Agent card or ERC-8004 registration URL</label>
+          <input
+            id="reg-uri"
+            className="input"
+            name="registration-url"
+            type="url"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="reg-uri-hint"
+            placeholder="https://your-agent.example/registration.json"
+            value={uri}
+            onChange={(e) => setUri(e.target.value)}
+          />
+          <small id="reg-uri-hint">Serve it with the SDK’s serveAgents(); it lists your services and prices.</small>
         </div>
         <div className="field">
-          <label>Agent wallet (signs quotes, IOUs and deliveries; receives payouts)</label>
-          <input className="input" placeholder="0x… (defaults to your wallet)" value={signer} onChange={(e) => setSigner(e.target.value)} />
+          <label htmlFor="reg-signer">Agent wallet (signs quotes, IOUs and deliveries; receives payouts)</label>
+          <input
+            id="reg-signer"
+            className="input mono"
+            name="agent-wallet"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="0x… (defaults to your wallet)"
+            value={signer}
+            onChange={(e) => setSigner(e.target.value)}
+          />
         </div>
         <Btn
           disabled={!uri}
@@ -165,7 +192,7 @@ function ManageAgent({ a, cfg, wallet, act }: { a: AgentSummary; cfg: KohakuConf
   const id = BigInt(a.agentId);
   const c = a.collateral;
   return (
-    <div style={{ padding: "14px 0", borderBottom: "1px solid var(--line-soft)" }}>
+    <div className="list-row" style={{ padding: "16px 0" }}>
       <div className="agent-cell" style={{ marginBottom: 10 }}>
         <AgentGem id={a.agentId} size={32} />
         <div>
@@ -185,7 +212,16 @@ function ManageAgent({ a, cfg, wallet, act }: { a: AgentSummary; cfg: KohakuConf
         </div>
       </div>
       <div className="control-bar">
-        <input className="input" style={{ width: 90, padding: "5px 10px" }} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input
+          className="input input-sm"
+          style={{ width: 96 }}
+          name="amount"
+          inputMode="decimal"
+          autoComplete="off"
+          aria-label={`Amount in USDC for ${a.name}`}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
         <Btn
           size="sm"
           onClick={() =>

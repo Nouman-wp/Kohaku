@@ -1,48 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="kb" cx="44%" cy="30%" r="78%">
-      <stop offset="0" stop-color="#3a2391"/>
-      <stop offset="0.42" stop-color="#1b0f57"/>
-      <stop offset="1" stop-color="#070320"/>
-    </radialGradient>
-    <linearGradient id="kr" x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0" stop-color="#f3d2ff"/>
-      <stop offset="0.45" stop-color="#ab92ff"/>
-      <stop offset="1" stop-color="#6f7dff"/>
-    </linearGradient>
-    <radialGradient id="kc" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#fff6df"/>
-      <stop offset="0.22" stop-color="#ffd27f"/>
-      <stop offset="0.5" stop-color="#ff9f45" stop-opacity="0.75"/>
-      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="kh" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#c7b3ff" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#c7b3ff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="kg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
     <clipPath id="kclip"><path d="M217.58,67.30 Q256.00,42.00 294.42,67.30 L393.06,132.26 Q431.48,157.56 431.48,203.56 L431.48,308.44 Q431.48,354.44 393.06,379.74 L294.42,444.70 Q256.00,470.00 217.58,444.70 L118.94,379.74 Q80.52,354.44 80.52,308.44 L80.52,203.56 Q80.52,157.56 118.94,132.26 Z"/></clipPath>
   </defs>
-  <path d="M217.58,67.30 Q256.00,42.00 294.42,67.30 L393.06,132.26 Q431.48,157.56 431.48,203.56 L431.48,308.44 Q431.48,354.44 393.06,379.74 L294.42,444.70 Q256.00,470.00 217.58,444.70 L118.94,379.74 Q80.52,354.44 80.52,308.44 L80.52,203.56 Q80.52,157.56 118.94,132.26 Z" fill="url(#kb)"/>
+  <path d="M217.58,67.30 Q256.00,42.00 294.42,67.30 L393.06,132.26 Q431.48,157.56 431.48,203.56 L431.48,308.44 Q431.48,354.44 393.06,379.74 L294.42,444.70 Q256.00,470.00 217.58,444.70 L118.94,379.74 Q80.52,354.44 80.52,308.44 L80.52,203.56 Q80.52,157.56 118.94,132.26 Z" fill="#0a0a0a"/>
   <g clip-path="url(#kclip)">
-    <circle cx="256" cy="216" r="230" fill="url(#kh)"/>
-    <g stroke="#cbb8ff" stroke-opacity="0.22" stroke-width="3"><line x1="256" y1="42" x2="256" y2="149.92000000000002" /><line x1="431.48" y1="157.56" x2="347.52" y2="204" /><line x1="431.48" y1="354.44" x2="347.52" y2="308" /><line x1="256" y1="470" x2="256" y2="362.08" /><line x1="80.52000000000001" y1="354.44" x2="164.48000000000002" y2="308" /><line x1="80.52000000000001" y1="157.56" x2="164.48000000000002" y2="204" /></g>
-    <path d="M240.50,159.08 Q256.00,149.92 271.50,159.08 L332.02,194.84 Q347.52,204.00 347.52,222.00 L347.52,290.00 Q347.52,308.00 332.02,317.16 L271.50,352.92 Q256.00,362.08 240.50,352.92 L179.98,317.16 Q164.48,308.00 164.48,290.00 L164.48,222.00 Q164.48,204.00 179.98,194.84 Z" fill="#ffffff" fill-opacity="0.035" stroke="#d9c9ff" stroke-opacity="0.28" stroke-width="3"/>
-    <circle cx="256" cy="260" r="92" fill="url(#kc)"/>
-    <g stroke="#efe6ff" stroke-opacity="0.75" stroke-width="4.5" stroke-linecap="round">
+    <g stroke="#ececea" stroke-opacity="0.16" stroke-width="3"><line x1="256" y1="42" x2="256" y2="149.92000000000002" /><line x1="431.48" y1="157.56" x2="347.52" y2="204" /><line x1="431.48" y1="354.44" x2="347.52" y2="308" /><line x1="256" y1="470" x2="256" y2="362.08" /><line x1="80.52000000000001" y1="354.44" x2="164.48000000000002" y2="308" /><line x1="80.52000000000001" y1="157.56" x2="164.48000000000002" y2="204" /></g>
+    <path d="M240.50,159.08 Q256.00,149.92 271.50,159.08 L332.02,194.84 Q347.52,204.00 347.52,222.00 L347.52,290.00 Q347.52,308.00 332.02,317.16 L271.50,352.92 Q256.00,362.08 240.50,352.92 L179.98,317.16 Q164.48,308.00 164.48,290.00 L164.48,222.00 Q164.48,204.00 179.98,194.84 Z" fill="none" stroke="#ececea" stroke-opacity="0.24" stroke-width="3"/>
+    <g stroke="#ececea" stroke-opacity="0.8" stroke-width="4.5" stroke-linecap="round">
       <line x1="194" y1="186" x2="256" y2="260"/><line x1="326" y1="204" x2="256" y2="260"/><line x1="334" y1="306" x2="256" y2="260"/><line x1="248" y1="340" x2="256" y2="260"/><line x1="174" y1="292" x2="256" y2="260"/>
     </g>
-    <g stroke="#efe6ff" stroke-opacity="0.32" stroke-width="3" stroke-linecap="round">
+    <g stroke="#ececea" stroke-opacity="0.3" stroke-width="3" stroke-linecap="round">
       <line x1="194" y1="186" x2="326" y2="204"/>
       <line x1="334" y1="306" x2="248" y2="340"/>
       <line x1="248" y1="340" x2="174" y2="292"/>
     </g>
-    <circle cx="194" cy="186" r="9" fill="#f4f0ff"/><circle cx="326" cy="204" r="8" fill="#f4f0ff"/><circle cx="334" cy="306" r="7" fill="#f4f0ff"/><circle cx="248" cy="340" r="8" fill="#f4f0ff"/><circle cx="174" cy="292" r="7" fill="#f4f0ff"/>
-    <circle cx="256" cy="260" r="17" fill="#fff8e8"/>
-    <path d="M 106 136 Q 256 6 406 136 L 406 -4 L 106 -4 Z" fill="url(#kg)"/>
+    <circle cx="194" cy="186" r="9" fill="#ececea"/><circle cx="326" cy="204" r="8" fill="#ececea"/><circle cx="334" cy="306" r="7" fill="#ececea"/><circle cx="248" cy="340" r="8" fill="#ececea"/><circle cx="174" cy="292" r="7" fill="#ececea"/>
+    <circle cx="256" cy="260" r="38" fill="#b8f34d" fill-opacity="0.16"/>
+    <circle cx="256" cy="260" r="22" fill="#b8f34d"/>
   </g>
-  <path d="M217.58,67.30 Q256.00,42.00 294.42,67.30 L393.06,132.26 Q431.48,157.56 431.48,203.56 L431.48,308.44 Q431.48,354.44 393.06,379.74 L294.42,444.70 Q256.00,470.00 217.58,444.70 L118.94,379.74 Q80.52,354.44 80.52,308.44 L80.52,203.56 Q80.52,157.56 118.94,132.26 Z" fill="none" stroke="url(#kr)" stroke-width="9"/>
+  <path d="M217.58,67.30 Q256.00,42.00 294.42,67.30 L393.06,132.26 Q431.48,157.56 431.48,203.56 L431.48,308.44 Q431.48,354.44 393.06,379.74 L294.42,444.70 Q256.00,470.00 217.58,444.70 L118.94,379.74 Q80.52,354.44 80.52,308.44 L80.52,203.56 Q80.52,157.56 118.94,132.26 Z" fill="none" stroke="#b8f34d" stroke-width="10"/>
 </svg>

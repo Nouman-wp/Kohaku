@@ -19,7 +19,7 @@ import {
 } from "@kohaku/core";
 import { useApi, useLive, agentName } from "../lib/api.ts";
 import { signedUsd, usd, explorerTx, explorerAddr } from "../lib/format.ts";
-import { AgentGem, Badge, HashLink, Panel, Pill } from "../components/ui.tsx";
+import { AgentGem, HashLink, PageHead, Panel, Pill } from "../components/ui.tsx";
 import { IconCheck, IconX } from "../components/icons.tsx";
 import { Loading, Missing } from "./Epochs.tsx";
 
@@ -71,23 +71,28 @@ export default function JobPage() {
   return (
     <main className="page">
       <div className="page-inner">
-        <div className="crumbs">
-          <Link to="/floor">Floor</Link> / <Link to={`/epochs/${job.epoch}`}>Epoch {job.epoch}</Link> / <span>{job.id}</span>
-        </div>
-        <div className="page-head">
-          <div>
-            <Badge>Chain of evidence</Badge>
-            <h1 className="page-title">
+        <PageHead
+          crumbs={
+            <>
+              <Link to="/floor">Floor</Link> / <Link to={`/epochs/${job.epoch}`}>Epoch {job.epoch}</Link> / <span className="mono">{job.id}</span>
+            </>
+          }
+          title={
+            <>
               {buyer?.name ?? `#${job.buyer}`} bought {job.service} from {seller?.name ?? `#${job.seller}`}
-            </h1>
-            <p className="page-sub">
-              {usd(job.price, 4)} · epoch {job.epoch} · <Pill tone={job.status === "settled" ? "good" : job.status === "voided" ? "warn" : "accent"}>{job.status}</Pill>. Every signature below is
-              re-verified in your browser against the parties' registered keys.
-            </p>
-          </div>
-        </div>
+            </>
+          }
+          meta={
+            <>
+              <Pill tone={job.status === "settled" ? "good" : job.status === "voided" ? "warn" : "accent"}>{job.status}</Pill>
+              <span className="mono">{usd(job.price, 4)}</span>
+              <span>Epoch {job.epoch}</span>
+            </>
+          }
+          sub="The chain of evidence for one job. Every signature below is re-verified in your browser against the parties’ registered keys."
+        />
 
-        <div className="chain">
+        <ol className="chain">
           <Link_ n="1" title="Job" ok={checks.jobHash}>
             <Check ok={checks.jobHash}>job hash recomputed from the spec</Check>
             <dl className="kv" style={{ marginTop: 10 }}>
@@ -268,10 +273,10 @@ export default function JobPage() {
               <span className="muted">Not paid out yet.</span>
             )}
           </Link_>
-        </div>
+        </ol>
 
         {data.children.length > 0 && (
-          <Panel title={`Sub-jobs this job paid for (${data.children.length})`} className="" >
+          <Panel title={`Sub-jobs this job paid for (${data.children.length})`}>
             {data.children.map((c) => (
               <Link key={c.id} to={`/jobs/${c.id}`} className="stream-item">
                 <AgentGem id={c.seller} size={20} />
@@ -290,21 +295,23 @@ export default function JobPage() {
 
 function Link_({ n, title, ok, children }: { n: string; title: ReactNode; ok: boolean | null | undefined; children: ReactNode }) {
   return (
-    <div className="link">
-      <div className={`link-dot ${ok === null || ok === undefined ? "off" : ""}`}>{ok === false ? <IconX /> : ok ? <IconCheck /> : n}</div>
+    <li className="link">
+      <div className={`link-dot ${ok === null || ok === undefined ? "off" : ok === false ? "bad" : ""}`} aria-label={ok === false ? "Failed" : ok ? "Verified" : `Step ${n}`}>
+        {ok === false ? <IconX aria-hidden /> : ok ? <IconCheck aria-hidden /> : n}
+      </div>
       <Panel>
         <div className="link-title">{title}</div>
         {children}
       </Panel>
-    </div>
+    </li>
   );
 }
 
 function Check({ ok, children }: { ok: boolean | null | undefined; children: ReactNode }) {
-  if (ok === undefined || ok === null) return <div className="check" style={{ color: "var(--text-3)" }}>… {children}</div>;
+  if (ok === undefined || ok === null) return <div className="check pending">… {children}</div>;
   return (
     <div className={`check ${ok ? "" : "bad"}`}>
-      {ok ? <IconCheck size={14} /> : <IconX size={14} />} {children}
+      {ok ? <IconCheck size={14} aria-label="Passed" /> : <IconX size={14} aria-label="Failed" />} {children}
     </div>
   );
 }

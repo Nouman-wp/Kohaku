@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-/** Stroke icons, 1.5px, outlined, in the Reflect manner. */
+/** Stroke icons: 1.5px, outlined, round joins. One set across the site. */
 type P = SVGProps<SVGSVGElement> & { size?: number };
 
 const base = (size = 24, rest: SVGProps<SVGSVGElement>) => ({
@@ -14,21 +14,6 @@ const base = (size = 24, rest: SVGProps<SVGSVGElement>) => ({
   strokeLinejoin: "round" as const,
   ...rest,
 });
-
-export const Sparkle = ({ size = 16, ...p }: P) => (
-  <svg {...base(size, p)} viewBox="0 0 16 16" stroke="none" fill="url(#spark-g)">
-    <defs>
-      <linearGradient id="spark-g" x1="0" y1="0" x2="16" y2="16" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#E59CFF" />
-        <stop offset="0.5" stopColor="#BA9CFF" />
-        <stop offset="1" stopColor="#9CB2FF" />
-      </linearGradient>
-    </defs>
-    <path d="M8 1.2c.3 2.9 1.5 4.6 4.6 5.1.4.1.4.6 0 .7-3.1.5-4.3 2.2-4.6 5.1-.1.4-.6.4-.7 0-.3-2.9-1.5-4.6-4.6-5.1-.4-.1-.4-.6 0-.7C5.8 5.8 7 4.1 7.3 1.2c.1-.4.6-.4.7 0Z" />
-    <circle cx="13" cy="12.6" r="1.1" />
-    <circle cx="3.2" cy="3" r="0.8" />
-  </svg>
-);
 
 export const IconIou = (p: P) => (
   <svg {...base(p.size ?? 40, p)}>
@@ -187,5 +172,26 @@ export const IconBolt = (p: P) => (
 export const IconCode = (p: P) => (
   <svg {...base(p.size ?? 24, p)}>
     <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13" />
+  </svg>
+);
+
+export const IconCopy = (p: P) => (
+  <svg {...base(p.size ?? 14, p)} viewBox="0 0 16 16">
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10.5 3.5v-.5A1 1 0 0 0 9.5 2h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" />
+  </svg>
+);
+
+export const IconClock = (p: P) => (
+  <svg {...base(p.size ?? 16, p)}>
+    <circle cx="12" cy="12" r="8.25" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+);
+
+export const IconChain = (p: P) => (
+  <svg {...base(p.size ?? 16, p)}>
+    <path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-.75.75" />
+    <path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l.75-.75" />
   </svg>
 );

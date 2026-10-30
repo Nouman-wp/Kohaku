@@ -2,7 +2,9 @@ import { StrictMode, lazy, Suspense, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "@fontsource-variable/inter";
-import "@fontsource/dm-sans/500.css";
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource/instrument-serif/latin-400-italic.css";
+import "@fontsource-variable/jetbrains-mono";
 import "./styles/base.css";
 import "./styles/landing.css";
 import "./styles/app.css";
@@ -25,39 +27,42 @@ const Developers = lazy(() => import("./pages/Developers.tsx").then((m) => ({ de
 const Status = lazy(() => import("./pages/Developers.tsx").then((m) => ({ default: m.Status })));
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
+    if (!hash) window.scrollTo(0, 0);
   }, [pathname]);
   return null;
 }
 
+// Entrance animations only hide content once this script runs (see base.css).
+document.documentElement.classList.add("js-reveal");
+
 function App() {
-  const { pathname } = useLocation();
-  const landing = pathname === "/";
   return (
     <>
       <ScrollToTop />
-      <Header compact={!landing} />
-      <Suspense fallback={<div className="page" />}>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/floor" element={<Floor />} />
-          <Route path="/epochs" element={<EpochList />} />
-          <Route path="/epochs/:id" element={<EpochPage />} />
-          <Route path="/agents" element={<AgentList />} />
-          <Route path="/agents/:id" element={<AgentPage />} />
-          <Route path="/jobs/:id" element={<JobPage />} />
-          <Route path="/disputes" element={<Disputes />} />
-          <Route path="/verify" element={<Verify />} />
-          <Route path="/console" element={<Console />} />
-          <Route path="/intents/new" element={<IntentComposer />} />
-          <Route path="/intents/:id" element={<IntentPage />} />
-          <Route path="/developers" element={<Developers />} />
-          <Route path="/status" element={<Status />} />
-          <Route path="*" element={<Landing />} />
-        </Routes>
-      </Suspense>
+      <Header />
+      <div id="content" tabIndex={-1}>
+        <Suspense fallback={<div className="page" aria-busy="true" />}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/floor" element={<Floor />} />
+            <Route path="/epochs" element={<EpochList />} />
+            <Route path="/epochs/:id" element={<EpochPage />} />
+            <Route path="/agents" element={<AgentList />} />
+            <Route path="/agents/:id" element={<AgentPage />} />
+            <Route path="/jobs/:id" element={<JobPage />} />
+            <Route path="/disputes" element={<Disputes />} />
+            <Route path="/verify" element={<Verify />} />
+            <Route path="/console" element={<Console />} />
+            <Route path="/intents/new" element={<IntentComposer />} />
+            <Route path="/intents/:id" element={<IntentPage />} />
+            <Route path="/developers" element={<Developers />} />
+            <Route path="/status" element={<Status />} />
+            <Route path="*" element={<Landing />} />
+          </Routes>
+        </Suspense>
+      </div>
       <Footer />
     </>
   );
