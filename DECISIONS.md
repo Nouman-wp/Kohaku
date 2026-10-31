@@ -233,9 +233,10 @@ why. Newest decisions are at the bottom of each section.
     `0xf2Fd62c083F3BF324e99ce157D1a42d7EbA77f1d`) carries LINK, WHSK and OpenUSDT
     (`0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189`, not the USDT HSP accepts), and no USDC. USDC for
     mainnet agents has to come over a bridge (it is "Bridged USDC"), not CCIP.
-- **Explorers:** mainnet `hashkey.blockscout.com`. The documented testnet explorer
-  `testnet-explorer.hsk.xyz` had no DNS record on 25 October 2026, so testnet contracts were deployed
-  without source verification; `forge verify-contract` can be re-run when it is back.
+- **Explorers:** mainnet `hashkey.blockscout.com`, testnet `testnet-explorer.hskchain.net` (Blockscout).
+  The testnet explorer first documented, `testnet-explorer.hsk.xyz`, had no DNS record on 25 October
+  2026, so testnet contracts were deployed without source verification; `forge verify-contract`
+  against the new explorer's `/api` can add the sources.
 
 ### 19. Where the live system runs
 

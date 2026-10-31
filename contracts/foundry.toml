@@ -35,7 +35,7 @@ hashkey_testnet = "https://testnet.hsk.xyz"
 hashkey = "https://mainnet.hsk.xyz"
 
 [etherscan]
-hashkey_testnet = { key = "blockscout", chain = 133, url = "https://testnet-explorer.hsk.xyz/api" }
+hashkey_testnet = { key = "blockscout", chain = 133, url = "https://testnet-explorer.hskchain.net/api" }
 hashkey = { key = "blockscout", chain = 177, url = "https://hashkey.blockscout.com/api" }
 
 [fmt]

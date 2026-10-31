@@ -15,7 +15,7 @@ export const hashkeyTestnet = defineChain({
   name: "HashKey Chain Testnet",
   nativeCurrency: { name: "HashKey", symbol: "HSK", decimals: 18 },
   rpcUrls: { default: { http: ["https://testnet.hsk.xyz"] } },
-  blockExplorers: { default: { name: "Blockscout", url: "https://testnet-explorer.hsk.xyz" } },
+  blockExplorers: { default: { name: "Blockscout", url: "https://testnet-explorer.hskchain.net" } },
   testnet: true,
 });
 

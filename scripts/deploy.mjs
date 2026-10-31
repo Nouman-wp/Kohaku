@@ -11,7 +11,7 @@ import { ANVIL_KEYS, ROOT, bin, loadEnv, runToEnd, useNetworkEnv } from "./lib.m
 
 const NETWORKS = {
   local: { rpc: "http://127.0.0.1:8545", id: 31337 },
-  "hashkey-testnet": { rpc: "https://testnet.hsk.xyz", id: 133, verifier: "https://testnet-explorer.hsk.xyz/api/" },
+  "hashkey-testnet": { rpc: "https://testnet.hsk.xyz", id: 133, verifier: "https://testnet-explorer.hskchain.net/api/" },
   hashkey: { rpc: "https://mainnet.hsk.xyz", id: 177, verifier: "https://hashkey.blockscout.com/api/" },
 };
 

@@ -101,6 +101,7 @@ export function Header() {
 }
 
 export function Footer() {
+  const explorer = useLive().stats?.chain.explorer ?? "https://hashkey.blockscout.com";
   return (
     <footer className="footer">
       <div className="wrap">
@@ -148,7 +149,7 @@ export function Footer() {
             <a href={REPO} target="_blank" rel="noreferrer">
               GitHub
             </a>
-            <a href="https://hashkey.blockscout.com" target="_blank" rel="noreferrer">
+            <a href={explorer} target="_blank" rel="noreferrer">
               HashKey Chain explorer
             </a>
           </nav>
