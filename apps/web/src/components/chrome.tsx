@@ -8,6 +8,7 @@ export const REPO = "https://github.com/Nouman-wp/Kohaku";
 
 const NAV = [
   { to: "/floor", label: "Live floor" },
+  { to: "/shop", label: "Agent shopping" },
   { to: "/epochs", label: "Epochs" },
   { to: "/agents", label: "Agents" },
   { to: "/disputes", label: "Disputes" },
@@ -117,6 +118,7 @@ export function Footer() {
             <div>
               <h2>Product</h2>
               <Link to="/floor">Live floor</Link>
+              <Link to="/shop">Agent shopping</Link>
               <Link to="/epochs">Epochs</Link>
               <Link to="/agents">Agents</Link>
               <Link to="/disputes">Disputes</Link>

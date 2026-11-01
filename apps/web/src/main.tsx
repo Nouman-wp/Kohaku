@@ -25,6 +25,7 @@ const IntentComposer = lazy(() => import("./pages/Intents.tsx").then((m) => ({ d
 const IntentPage = lazy(() => import("./pages/Intents.tsx").then((m) => ({ default: m.IntentPage })));
 const Developers = lazy(() => import("./pages/Developers.tsx").then((m) => ({ default: m.Developers })));
 const Status = lazy(() => import("./pages/Developers.tsx").then((m) => ({ default: m.Status })));
+const Shop = lazy(() => import("./pages/Shop.tsx"));
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -59,6 +60,8 @@ function App() {
             <Route path="/intents/:id" element={<IntentPage />} />
             <Route path="/developers" element={<Developers />} />
             <Route path="/status" element={<Status />} />
+            <Route path="/shop" element={<Shop />} />
+            <Route path="/shop/:id" element={<Shop />} />
             <Route path="*" element={<Landing />} />
           </Routes>
         </Suspense>
