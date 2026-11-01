@@ -10,7 +10,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "smoke": "tsx test/smoke.ts"
+    "smoke": "tsx test/smoke.ts",
+    "shop": "tsx test/shop.ts"
   },
   "dependencies": {
     "@kohaku/core": "workspace:*",
