@@ -218,6 +218,7 @@ export function installConcierge(fleet: Fleet, agent: KohakuAgent): void {
 
         // 2. prices across stores
         const cmp = await fleet.hireFrom<{ offers: Record<string, ShopOffer[]> }>("concierge", "pricewise", "compare", { models: candidates.map((c) => c.id), session: s.id }, { intentId, parentJobId: ctx.jobId, session: s.id });
+        if (s.jobs[0] && s.jobs[0].epoch === 0) s.jobs[0].epoch = cmp.epoch; // the buyer's job clears in the same epoch
         const inStock = (m: PhoneModel) => (cmp.result.offers[m.id] ?? []).filter((o) => o.stock > 0);
         const priced = candidates.filter((m) => inStock(m).length > 0);
         const within = priced.filter((m) => !budget || inStock(m)[0]!.price <= budget * 1.08);

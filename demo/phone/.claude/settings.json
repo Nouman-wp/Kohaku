@@ -1,0 +1,16 @@
+{
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "allow": [
+      "mcp__kohaku__shop_for",
+      "mcp__kohaku__add_to_cart",
+      "mcp__kohaku__checkout",
+      "mcp__kohaku__approve_payment",
+      "mcp__kohaku__submit_payment",
+      "mcp__kohaku__payment_status",
+      "mcp__kohaku__check_balance",
+      "mcp__kohaku__find_agent",
+      "mcp__kohaku__get_job"
+    ]
+  }
+}

@@ -518,11 +518,38 @@ export class Fleet {
       allowedServices: [],
       allowedSellers: [],
       notBefore: now - 60n,
-      deadline: now + 86_400n,
+      deadline: now + 7n * 86_400n,
       nonce: BigInt(Date.now()),
     });
     this.log("fleet", `guest agent #${agentId} (${account.address}) onboarded`);
     return { privateKey: pk, agentId: agentId.toString(), intentId: view.id, clearingUrl: this.cfg.clearingUrl, address: account.address };
+  }
+
+  /**
+   * A fresh intent for an existing guest whose intent expired or ran out, so an MCP client
+   * keeps the same agent and wallet (and any test tokens sent to it) across sessions.
+   */
+  async renewGuest(agentId: string): Promise<{ intentId: string }> {
+    this.guestLog = this.guestLog.filter((t) => t > Date.now() - 3_600_000);
+    if (this.guestLog.length >= this.cfg.guestSessionsPerHour * 2) throw new Error("guest renewals are rate limited; try again later");
+    const a = await this.agentSummary(agentId);
+    if (!a.cardUrl.includes("/guests/") || a.operator.toLowerCase() !== this.operator.address.toLowerCase()) throw new Error("only guest agents can be renewed");
+    this.guestLog.push(Date.now());
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const view = await this.operator.authorise(this.client, {
+      buyer: BigInt(a.agentId),
+      goal: "Guest session: hire Kohaku agents from an MCP client",
+      budget: USD(1),
+      perJobCap: USD(0.06),
+      minSellerReputation: 600,
+      allowedServices: [],
+      allowedSellers: [],
+      notBefore: now - 60n,
+      deadline: now + 7n * 86_400n,
+      nonce: BigInt(Date.now()),
+    });
+    this.log("fleet", `guest agent #${a.agentId} renewed with intent ${view.id.slice(0, 10)}`);
+    return { intentId: view.id };
   }
 
   // ---------------------------------------------------------------- control API
@@ -565,6 +592,14 @@ export class Fleet {
     }
     if (req.method === "GET" && p === "/control/logs") {
       end(res, 200, this.logs.slice(-200));
+      return true;
+    }
+    if (req.method === "POST" && p === "/guest/renew") {
+      try {
+        end(res, 200, await this.renewGuest(String((body as { agentId?: string } | null)?.agentId ?? "")));
+      } catch (err) {
+        end(res, 429, { error: (err as Error).message });
+      }
       return true;
     }
     if (req.method === "POST" && p === "/guest/session") {

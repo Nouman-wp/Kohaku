@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import type { AgentSummary } from "@kohaku/core";
-import { api, fleet, useLive } from "../lib/api.ts";
+import type { AgentSummary, EpochView } from "@kohaku/core";
+import { api, fleet, useApi, useLive } from "../lib/api.ts";
 import { ago, clock, short, usd } from "../lib/format.ts";
 import { AgentGem, Panel, Pill, useNow } from "../components/ui.tsx";
 
@@ -284,7 +284,7 @@ function HireGraph({ session, agents, now }: { session: Session; agents: AgentSu
   return (
     <svg className="shop-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Which agent hired which, with the number of paid jobs on each arrow">
       <defs>
-        <marker id="shop-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker id="shop-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
         </marker>
       </defs>
@@ -294,7 +294,7 @@ function HireGraph({ session, agents, now }: { session: Session; agents: AgentSu
         if (!a || !b) return null;
         const hot = now - e.last < 2_500;
         // labels sit at different points along the arrow per source, so fans do not collide
-        const t = e.from === "clipper" ? 0.64 : e.from === "pricewise" ? 0.36 : 0.5;
+        const t = e.from === "clipper" ? 0.72 : e.from === "pricewise" ? 0.3 : 0.5;
         const mx = a.x + (b.x - a.x) * t;
         const my = a.y + 16 + (b.y - 18 - (a.y + 16)) * t;
         const tag = `${e.count}×`;
@@ -562,39 +562,37 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
 // ─────────────────────────────────────────────── netting
 
 function NetBox({ session, epochs }: { session: Session; epochs: number[] }) {
-  const live = useLive();
-  const rows = useMemo(() => epochs.map((e) => ({ id: e, view: live.epochs.get(e), mine: session.jobs.filter((j) => j.epoch === e).length })), [epochs, live.epochs, session.jobs]);
-  if (!rows.length) return null;
+  if (!epochs.length) return null;
   return (
     <section className="shop-net">
-      {rows.map((r) => {
-        const v = r.view;
-        const sealed = v && v.phase !== "intake" && v.phase !== "challenge";
-        return (
-          <div key={r.id} className="shop-net-row">
-            <div>
-              <b>{r.mine}</b> of this request's payments are in <Link to={`/epochs/${r.id}`}>epoch {r.id}</Link>
-              {v ? (
-                <span className="muted">
-                  {" "}
-                  with {v.iouCount} IOUs from every agent on Kohaku
-                </span>
-              ) : null}
-              .
-            </div>
-            <div className="shop-net-result">
-              {sealed && v ? (
-                <>
-                  netted to <b>{v.settlementTransfers}</b> settlement transfer{v.settlementTransfers === 1 ? "" : "s"} through HSP ({v.transfersAvoided} avoided)
-                </>
-              ) : (
-                <span className="muted">nets into a handful of HSP settlements when the epoch closes</span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      {epochs.map((e) => (
+        <NetRow key={e} id={e} mine={session.jobs.filter((j) => j.epoch === e).length} />
+      ))}
     </section>
+  );
+}
+
+/** Each epoch read from the API: the live map only updates on phase changes. */
+function NetRow({ id, mine }: { id: number; mine: number }) {
+  const { data } = useApi<{ epoch: EpochView }>(`/v1/epochs/${id}`, 5_000);
+  const v = data?.epoch;
+  const netted = v && v.phase !== "intake" && v.phase !== "challenge";
+  return (
+    <div className="shop-net-row">
+      <div>
+        <b>{mine}</b> of this request's payments are in <Link to={`/epochs/${id}`}>epoch {id}</Link>
+        {v ? <span className="muted"> with {v.iouCount} IOUs in total from every agent on Kohaku</span> : null}.
+      </div>
+      <div className="shop-net-result">
+        {netted && v ? (
+          <>
+            netted to <b>{v.settlementTransfers}</b> settlement transfer{v.settlementTransfers === 1 ? "" : "s"} through HSP ({v.transfersAvoided} avoided)
+          </>
+        ) : (
+          <span className="muted">nets into a handful of HSP settlements when the epoch closes</span>
+        )}
+      </div>
+    </div>
   );
 }
 

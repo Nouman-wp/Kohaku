@@ -222,7 +222,7 @@ flowchart LR
 
 ## The agent fleet
 
-Eight agents run continuously and do real work. Each one is an on-chain identity with its own wallet, collateral, price list and reputation.
+Fourteen agents run continuously and do real work. Each one is an on-chain identity with its own wallet, collateral, price list and reputation. Eight make up the research fleet and six the shopping fleet.
 
 | Agent | Role | Sells | Price | Real work behind it |
 |---|---|---|---|---|
@@ -234,6 +234,12 @@ Eight agents run continuously and do real work. Each one is an on-chain identity
 | **Lens** | Chart reader | Chart description | $0.0025 / chart | Describes data series in plain words |
 | **Arbiter** | Validator | Dispute verdict | $0.01 / dispute | Staked validator that re-checks disputed jobs independently |
 | **Rogue** | Budget fact checker | Fact check (budget) | $0.0012 / claim | Undercuts Verifier and is deliberately unreliable, so disputes and reputation have something to catch |
+| **Concierge** | Shopping lead | Shopping research | $0.05 / request | Researches a purchase end to end by hiring Pricewise, Scout, Clipper and Scribe |
+| **Pricewise** | Price comparison | Price comparison | $0.004 / comparison | Buys a quote from every store for every product |
+| **Clipper** | Coupon hunter | Coupon hunt | $0.003 / hunt | Buys each store's promo codes and checks every code against the exact product and price |
+| **Amber Mart, Lantern Tech, Harbor Mobile** | Demo stores | Price quote, promo codes, coupon check | $0.0005 each | A labelled demo catalogue; checkout through HSP Agentic Payment |
+
+Scout also sells **spec sheets** ($0.0006): it reads a product's Wikipedia infobox, so the phones' specs are real.
 
 ## Live on HashKey Chain testnet
 
@@ -328,6 +334,32 @@ Copy `.env.example` to `.env`. Every setting is documented there. The ones you a
 Real keys only ever go in the git-ignored `.env`, `.env.testnet` and `.env.mainnet` files.
 
 </details>
+
+## Shop from your phone (Claude + HSP)
+
+The phone demo makes Claude the user's agent. The user asks for something, and a crowd of agents does the work and pays each other. The user approves, and the purchase goes through HSP.
+
+1. **Ask.** On the phone (Claude Code with Remote Control): *"Find me a phone under $500 with a great camera, with the best coupon."*
+2. **Agents work.** Claude hires the **Concierge**:
+   - **Pricewise** buys 24 quotes from three stores;
+   - **Scout** reads four spec sheets from Wikipedia;
+   - **Clipper** buys promo lists and checks about 30 coupon codes;
+   - **Scribe** writes the summary.
+
+   That is about 65 paid jobs in a few seconds. Every one is a signed IOU, and they net into a handful of HSP settlements at the end of the epoch.
+3. **Watch.** [kohaku.caspx.in/shop](https://kohaku.caspx.in/shop) shows who hired whom, every payment between agents, the ranked options, the cart and the checkout.
+4. **Buy.** The user picks a phone and Claude adds it to the cart. Claude confirms the merchant name, the store's wallet and the payer, one at a time. Then it checks out through **HSP Agentic Payment**: the store opens the order from Kohaku's allowlisted server, the user's wallet signs HSP's EIP-712 data locally, and HSP builds, submits and confirms the payment.
+
+To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking in HSP's test USDC; fund the payer with `node scripts/fund-payer.mjs testnet 20`.
+
+| Tool | What it does |
+|---|---|
+| `shop_for` | Hire the Concierge; returns ranked options and the live screen link |
+| `add_to_cart` | Put the chosen option in the store's cart |
+| `checkout` | Open the HSP order and lock a 5-minute quote for this wallet |
+| `approve_payment` | Sign HSP's EIP-712 authorization locally and build the payment mandate |
+| `submit_payment` | Submit to HSP |
+| `payment_status` | HSP's status, team attribution and transaction hash |
 
 ## Use it from Claude (MCP)
 
@@ -443,20 +475,23 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 | Netting, collateral locks, settlements, defaults, payouts and reputation are on-chain transactions | Locally and on testnet the stablecoin is Kohaku Test USDC (HSP's testnet USDC is owner-mint only); mainnet uses USDC |
 | Agents do real work: Wikipedia search, MyMemory translation, extractive summaries, chart analysis, independent re-checks | Offline fallbacks (labelled `offline` / `offline-glossary`) when those services are unreachable |
 | Every number on the website comes from the ledger and the chain; there are no sample or placeholder figures | The clearing fee is 0% in this version |
+| The shopping checkout is a real HSP Agentic Payment order on HSP's QA environment, attributed to team Kohaku; phone specs come live from Wikipedia | **Demo stores**: Amber Mart, Lantern Tech and Harbor Mobile, their prices, stock and coupons are sample data, labelled on every screen; on testnet the checkout charges a $1 pre-booking |
 
 ## Status and roadmap
 
 **Done**
-- [x] Contracts deployed on HashKey Chain testnet; eight agents registered, collateralised and trading
+- [x] Contracts deployed on HashKey Chain testnet; fourteen agents registered, collateralised and trading
 - [x] Netting recomputed on chain, collateral, defaults, disputes and ERC-8004 reputation
 - [x] HSP settlement following HashKey's published Merchant API (cart mandate → payment mandate → EIP-3009), with the local gateway on testnet
 - [x] Website with live data only, independent verification, audit exports, operator console and intent composer
 - [x] MCP server and SDK; guest sessions for any MCP client
 - [x] Supabase mirror and restore; free-server kit; CI on every push
 - [x] Always-on backend on AWS (Sydney) at `kohaku-api.caspx.in`, website at [kohaku.caspx.in](https://kohaku.caspx.in)
+- [x] Shopping fleet and the phone demo; the server is on HSP's QA allowlist and checkout orders and quotes run through HSP Agentic Payment
 
 **In progress**
-- [ ] HSP QA access for the server (IP allowlisting requested) and HSP test USDC → settle testnet through HSP Agentic Payment
+- [ ] HSP test USDC for the payer wallet, to complete the first checkout payment end to end
+- [ ] Settle the epochs' net debts through HSP Agentic Payment too (needs a testnet redeploy on HSP's USDC)
 
 **Next**
 - Mainnet (chain 177) after the hackathon, more stablecoins (USDT through Permit2), cross-chain collateral (CCIP), credit lines underwritten by receipt history, and a public agent marketplace.

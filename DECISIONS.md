@@ -366,3 +366,33 @@ why. Newest decisions are at the bottom of each section.
 - **Open with HashKey:** whether the merchant can advance the gas fee (`gas_fee_advanced`) so the payer
   pays exactly the order amount. Kohaku requires the exact debt to reach the pool, and a payment that
   carried fees would be refused.
+
+### 30. Shopping agents, demo stores and an HSP Agentic Payment checkout
+
+- **Why:** the hackathon's HSP topic is agent payments: a payment agent builds a mandate from the
+  receiving agent's terms, signs it with a wallet, and HSP's gateway checks and executes it. The phone
+  demo shows that end to end next to Kohaku's own netting.
+- **What:**
+  - Three new agents (Concierge, Pricewise, Clipper) and three demo stores.
+  - Scout gains a spec-sheet service.
+  - The MCP server gains shopping and checkout tools.
+  - A `/shop` screen.
+- **Real vs demo:**
+  - Phone specs are read live from Wikipedia infoboxes, and every hire is a real IOU.
+  - The stores, prices, stock and coupons are a demo catalogue, because no free, reliable price API
+    exists. They are labelled on the screen, in the tool output and here.
+- **Checkout:**
+  - HSP Agentic Payment is an MCP server that only accepts allowlisted IPs. The store (on the
+    allowlisted server) runs create_order, get_order and prepare_payment.
+  - The buyer's MCP server signs the returned EIP-712 locally, so the key never leaves the user's
+    machine. It sends back only the signature, then the store runs finalize_payment and
+    submit_payment, and polls query_payment every 15 s.
+  - The tool descriptions and `demo/phone/CLAUDE.md` carry HSP's rules:
+    - merchant name, recipient and payer are confirmed one at a time;
+    - amount and parties are shown before signing and again before submitting;
+    - nothing is reported as final before `payment-finalized`.
+- **Amount:** on testnet the checkout charges a $1 pre-booking (`SHOP_DEPOSIT_USD`), not the phone's
+  price, because HSP's test USDC is scarce and owner-minted.
+- **Guests:** guest intents now last 7 days and are renewed for the same agent. The payer wallet,
+  and any test tokens sent to it, then survive across sessions.
+

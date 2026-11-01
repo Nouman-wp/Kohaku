@@ -54,6 +54,19 @@ async function session(chainId: number): Promise<Session> {
     const s = JSON.parse(readFileSync(file, "utf8")) as Session & { api?: string };
     const intent = await fetch(`${API}/v1/intents/${s.intentId}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     if (s.api === API && (intent as { intent?: { status?: string } } | null)?.intent?.status === "active") return s;
+    if (s.api === API && s.agentId) {
+      // same agent and wallet, new spending intent: keeps any tokens sent to this wallet usable
+      const r = await fetch(`${FLEET}/guest/renew`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId: s.agentId }) }).catch(() => null);
+      const body = r ? ((await r.json().catch(() => ({}))) as { intentId?: string }) : {};
+      if (r?.ok && body.intentId) {
+        const renewed = { ...s, intentId: body.intentId };
+        writeFileSync(file, JSON.stringify(renewed, null, 2));
+        log(`guest agent #${s.agentId} renewed`);
+        return renewed;
+      }
+    }
+    // never lose a key: keep the old session next to the new one
+    writeFileSync(join(dir, `guest-${chainId}-${s.agentId || "old"}-${Date.now()}.json`), readFileSync(file, "utf8"));
   }
   log("requesting a guest session from the fleet…");
   const res = await fetch(`${FLEET}/guest/session`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

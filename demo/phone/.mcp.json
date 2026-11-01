@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kohaku": {
+      "command": "node",
+      "args": ["../../packages/mcp/node_modules/tsx/dist/cli.mjs", "../../packages/mcp/src/index.ts"],
+      "env": {
+        "KOHAKU_API": "${KOHAKU_API:-https://kohaku-api.caspx.in}",
+        "KOHAKU_FLEET": "${KOHAKU_FLEET:-https://kohaku-api.caspx.in}",
+        "KOHAKU_WEB": "${KOHAKU_WEB:-https://kohaku.caspx.in}"
+      }
+    }
+  }
+}
