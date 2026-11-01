@@ -118,6 +118,9 @@ async function main(): Promise<void> {
   hspHealthy = await hsp.health();
 
   setInterval(() => void registry.sync(), 5_000);
+  // re-read every agent card now and then, so new or repriced services show up without a restart
+  setTimeout(() => void registry.sync(true), 60_000);
+  setInterval(() => void registry.sync(true), 10 * 60_000);
   setInterval(() => void settlements.tick().catch((err) => log("warn", "settlement", (err as Error).message)), 2_000);
   setInterval(() => void chain.ping(), 10_000);
   setInterval(async () => {

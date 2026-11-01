@@ -78,9 +78,18 @@ HSP_NETWORK=${testnet ? "hashkey-testnet" : "hashkey"}
 HSP_COIN=USDC
 HSP_GATEWAY_RELAYER_KEY=
 
+# HSP Agentic Payment: the demo stores take checkout payments through HashKey's MCP server.
+# HSP keeps the app key and secret; this server's public IP must be on HSP's allowlist, and
+# payments are attributed to HSP_MERCHANT_NAME (the team name). On testnet the checkout
+# charges a SHOP_DEPOSIT_USD pre-booking amount in HSP's SHOP_TOKEN.
+HSP_AGENTIC_URL=https://mcp-qa.hashkeymerchant.com/
+SHOP_TOKEN=USDC
+SHOP_DEPOSIT_USD=1
+
 # ── agent fleet ──────────────────────────────────────────────────────────────
 FLEET_PORT=${testnet ? "8788" : "8798"}
 PUBLIC_FLEET_URL=http://localhost:${testnet ? "8788" : "8798"}
+PUBLIC_WEB_URL=http://localhost:5173
 CLEARING_URL=http://localhost:${testnet ? "8787" : "8797"}
 FLEET_CONTROL_URL=http://localhost:${testnet ? "8788" : "8798"}
 FLEET_SEED=

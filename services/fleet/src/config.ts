@@ -40,6 +40,13 @@ export interface FleetConfig {
   gasTarget: bigint;
   rogueBadRate: number;
   guestSessionsPerHour: number;
+  /** the website, for links to the live shopping screen */
+  webUrl: string;
+  /** HSP Agentic Payment (MCP, Streamable HTTP); only reachable from allowlisted IPs */
+  hspAgenticUrl: string;
+  merchantName: string;
+  shopToken: string;
+  shopDepositUsd: string;
 }
 
 export function loadFleetConfig(): FleetConfig {
@@ -71,6 +78,11 @@ export function loadFleetConfig(): FleetConfig {
     gasTarget: BigInt(Math.round(Number(e.GAS_TARGET ?? (local ? "0.5" : "0.004")) * 1e18)),
     rogueBadRate: Number(e.ROGUE_BAD_RATE ?? 0.5),
     guestSessionsPerHour: Number(e.GUEST_SESSIONS_PER_HOUR ?? 20),
+    webUrl: (e.PUBLIC_WEB_URL ?? e.PUBLIC_FLEET_URL ?? "http://localhost:5173").replace(/\/+$/, ""),
+    hspAgenticUrl: e.HSP_AGENTIC_URL ?? "https://mcp-qa.hashkeymerchant.com/",
+    merchantName: e.HSP_MERCHANT_NAME ?? "Kohaku",
+    shopToken: e.SHOP_TOKEN ?? "USDC",
+    shopDepositUsd: Number(e.SHOP_DEPOSIT_USD ?? 1).toFixed(2),
   };
 }
 

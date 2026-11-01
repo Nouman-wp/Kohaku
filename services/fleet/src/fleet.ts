@@ -15,8 +15,30 @@ import { agentKey, type FleetConfig } from "./config.ts";
 import { installArbiter } from "./agents/arbiter.ts";
 import { installOrchestrator, runBrief, TOPICS, type BriefRecord } from "./agents/orchestrator.ts";
 import { installLens, installPolyglot, installRogue, installScout, installScribe, installVerifier } from "./agents/workers.ts";
+import { installClipper, installConcierge, installPricewise, installSpecs, installStore } from "./agents/shop.ts";
+import { STORES } from "./shop/catalogue.ts";
+import { HspAgentic } from "./shop/hsp-agentic.ts";
+import { CheckoutError, ShopBook } from "./shop/book.ts";
+import { join } from "node:path";
+import { REPO_ROOT } from "./config.ts";
+import { isAddress, type Address } from "viem";
+import type { AgentSummary as Summary } from "@kohaku/core";
 
-type Slug = "orchestrator" | "scout" | "verifier" | "polyglot" | "scribe" | "lens" | "arbiter" | "rogue";
+type Slug =
+  | "orchestrator"
+  | "scout"
+  | "verifier"
+  | "polyglot"
+  | "scribe"
+  | "lens"
+  | "arbiter"
+  | "rogue"
+  | "concierge"
+  | "pricewise"
+  | "clipper"
+  | "amber-mart"
+  | "lantern-tech"
+  | "harbor-mobile";
 
 /** The validator stakes and answers on chain itself; everyone else only signs. */
 const NEEDS_GAS = new Set<Slug>(["arbiter"]);
@@ -47,7 +69,10 @@ export const MEMBERS: FleetMember[] = [
     slug: "scout",
     profile: { name: "Scout", role: "Search", description: "Searches Wikipedia and returns sourced snippets per query. Buys translations for non-English searches.", fleet: true },
     operator: "fleet",
-    install: installScout,
+    install: (fleet, agent) => {
+      installScout(fleet, agent);
+      installSpecs(fleet, agent);
+    },
     buys: [{ key: "main", goal: "[standing] Translate non-English search results", services: ["translate"], budget: USD(10), perJobCap: USD(0.01), minRep: 600 }],
   },
   {
@@ -86,6 +111,36 @@ export const MEMBERS: FleetMember[] = [
     buys: [],
   },
   {
+    slug: "concierge",
+    profile: { name: "Concierge", role: "Shopping lead", description: "Researches a purchase end to end: hires Pricewise to compare stores, Scout for live spec sheets, Clipper for coupons and Scribe for a write-up.", fleet: true },
+    operator: "fleet",
+    install: installConcierge,
+    buys: [{ key: "main", goal: "[standing] Buy price comparisons, spec sheets, coupon hunts and summaries", services: ["compare", "specs", "best-coupon", "summarize"], budget: USD(20), perJobCap: USD(0.01), minRep: 600 }],
+  },
+  {
+    slug: "pricewise",
+    profile: { name: "Pricewise", role: "Price comparison", description: "Compares price, stock and delivery across every store on Kohaku, buying one quote per store per product.", fleet: true },
+    operator: "fleet",
+    install: installPricewise,
+    buys: [{ key: "main", goal: "[standing] Buy price quotes from stores", services: ["price-quote"], budget: USD(10), perJobCap: USD(0.001), minRep: 600 }],
+  },
+  {
+    slug: "clipper",
+    profile: { name: "Clipper", role: "Coupon hunter", description: "Buys each store's promo codes and checks every code against the exact product and price to find the best deal.", fleet: true },
+    operator: "fleet",
+    install: installClipper,
+    buys: [{ key: "main", goal: "[standing] Buy promo lists and coupon checks from stores", services: ["promo-codes", "coupon-check"], budget: USD(10), perJobCap: USD(0.001), minRep: 600 }],
+  },
+  ...STORES.map(
+    (s): FleetMember => ({
+      slug: s.slug,
+      profile: { name: s.name, role: "Demo store", description: `${s.tagline} Sells price quotes, promo codes and coupon checks; takes checkout payments through HSP.`, fleet: true, organization: "Kohaku demo stores" },
+      operator: "fleet",
+      install: installStore(s),
+      buys: [],
+    }),
+  ),
+  {
     slug: "rogue",
     profile: { name: "Rogue", role: "Fact checker (budget)", description: "Undercuts everyone on fact checks. Deliberately unreliable, so disputes and reputation have something to catch.", fleet: true, organization: "Rogue Ops" },
     operator: "rogue",
@@ -116,6 +171,9 @@ export class Fleet {
   readonly logs: { at: number; slug: string; message: string }[] = [];
   readonly state: FleetState;
   client!: ClearingClient;
+  shop!: ShopBook;
+  chainId = 0;
+  private summaries: { at: number; list: Summary[] } | null = null;
   operator!: Operator;
   rogueOperator!: Operator;
   private handledIntents = new Set<string>();
@@ -144,6 +202,14 @@ export class Fleet {
     const clearingCfg = await waitFor(() => this.client.config(), "clearing service");
     this.operator = new Operator(clearingCfg, this.cfg.operatorKey, this.cfg.rpcUrl);
     this.rogueOperator = new Operator(clearingCfg, this.cfg.rogueOperatorKey, this.cfg.rpcUrl);
+    this.chainId = clearingCfg.chain.id;
+    const hsp = new HspAgentic(this.cfg.hspAgenticUrl, this.cfg.merchantName, (m) => this.log("hsp", m));
+    this.shop = new ShopBook(join(REPO_ROOT, ".data", `shop-${this.cfg.chain}-${clearingCfg.chain.id}.json`), hsp, {
+      chainId: clearingCfg.chain.id,
+      tokenSymbol: this.cfg.shopToken,
+      depositUsd: this.cfg.shopDepositUsd,
+      log: (m) => this.log("shop", m),
+    });
 
     // 1. agents with keys and cards, served before registration so the cards resolve
     for (const m of MEMBERS) {
@@ -284,6 +350,39 @@ export class Fleet {
     if (!seller) throw new Error(`no ${service} seller above reputation ${opts.minReputation ?? 600}`);
     this.touch(buyer);
     return agent.hire<T>(seller, service, input, { intentId, parentJobId: opts.parentJobId ?? null });
+  }
+
+  /** The registry's view of an agent, from a short-lived cache of the full list. */
+  async agentSummary(idOrSlug: string): Promise<Summary> {
+    if (!this.summaries || Date.now() - this.summaries.at > 15_000) this.summaries = { at: Date.now(), list: await this.client.agents() };
+    let a = this.summaries.list.find((x) => x.agentId === idOrSlug || x.slug === idOrSlug);
+    if (!a) {
+      this.summaries = { at: Date.now(), list: await this.client.agents() };
+      a = this.summaries.list.find((x) => x.agentId === idOrSlug || x.slug === idOrSlug);
+    }
+    if (!a) throw new Error(`no agent ${idOrSlug} in the registry yet`);
+    return a;
+  }
+
+  /** Hire one named seller (stores sell the same services, so "cheapest" is not the point). */
+  async hireFrom<T = unknown>(
+    buyer: string,
+    sellerSlug: string,
+    service: string,
+    input: unknown,
+    opts: { intentId?: string; parentJobId?: string | null; session?: string } = {},
+  ): Promise<HireResult<T>> {
+    const agent = this.agents.get(buyer);
+    if (!agent) throw new Error(`no agent ${buyer}`);
+    const intentId = opts.intentId ?? this.standing.get(`${buyer}:main`);
+    if (!intentId) throw new Error(`${buyer} has no intent to buy ${service}`);
+    const seller = await this.agentSummary(sellerSlug);
+    this.touch(buyer);
+    const r = await agent.hire<T>(seller, service, input, { intentId, parentJobId: opts.parentJobId ?? null });
+    if (opts.session) {
+      this.shop.job(opts.session, { jobId: r.jobId, at: Date.now(), buyer: agent.agentId.toString(), seller: seller.agentId, service, price: r.price.toString(), epoch: r.epoch, parentJobId: opts.parentJobId ?? null });
+    }
+    return r;
   }
 
   async dispute(buyer: string, jobId: string, reason: string, intentId: string): Promise<unknown> {
@@ -445,6 +544,12 @@ export class Fleet {
       });
       return true;
     }
+    // /shop/* through the API host; /control/shop/* through the website proxy, which forwards /control
+    const shopPath = p.startsWith("/shop/") ? p : p.startsWith("/control/shop/") ? p.slice("/control".length) : null;
+    if (shopPath) {
+      await this.shopRoute(req, res, shopPath, body);
+      return true;
+    }
     if (req.method === "GET" && p === "/control/status") {
       end(res, 200, await this.status());
       return true;
@@ -511,6 +616,84 @@ export class Fleet {
       return true;
     }
     return false;
+  }
+
+  /**
+   * The demo stores' public API: shopping sessions for the live screen, the cart, and the
+   * HSP Agentic Payment checkout (prepare -> payer signs locally -> finalize -> submit).
+   */
+  private async shopRoute(req: IncomingMessage, res: ServerResponse, p: string, body: unknown): Promise<void> {
+    const parts = p.split("/").filter(Boolean); // ["shop", ...]
+    const b = (body ?? {}) as Record<string, unknown>;
+    try {
+      if (req.method === "GET" && parts[1] === "latest") {
+        const s = this.shop.latest();
+        end(res, s ? 200 : 404, s ?? { error: "no shopping session yet" });
+        return;
+      }
+      if (req.method === "GET" && parts[1] === "sessions" && !parts[2]) {
+        end(res, 200, this.shop.list().map((s) => ({ id: s.id, need: s.need, status: s.status, createdAt: s.createdAt, jobs: s.jobs.length, cart: !!s.cart, checkout: s.checkout?.status ?? null })));
+        return;
+      }
+      if (req.method === "GET" && parts[1] === "stores") {
+        const stores = STORES.map((s) => ({ slug: s.slug, name: s.name, address: this.agents.get(s.slug)?.address ?? null, agentId: this.agents.get(s.slug)?.agentId.toString() ?? null }));
+        end(res, 200, { merchantName: this.shop.merchantName, depositUsd: this.cfg.shopDepositUsd, token: this.cfg.shopToken, stores });
+        return;
+      }
+      const s = parts[1] === "sessions" && parts[2] ? this.shop.get(parts[2]) : undefined;
+      if (!s) {
+        end(res, 404, { error: "unknown shopping session" });
+        return;
+      }
+      if (req.method === "GET" && parts.length === 3) {
+        end(res, 200, s);
+        return;
+      }
+      if (req.method !== "POST") {
+        end(res, 405, { error: "method not allowed" });
+        return;
+      }
+      if (parts[3] === "cart") {
+        const wanted = String(b.model ?? "").toLowerCase();
+        const opt =
+          s.options.find((o) => (wanted && (o.modelId === wanted || o.name.toLowerCase() === wanted)) || (b.option !== undefined && o.rank === Number(b.option))) ??
+          (b.option === undefined && !wanted ? s.options[0] : undefined);
+        if (!opt) throw new CheckoutError("no such option in this session; pass option (rank) or model (id)");
+        const offer = opt.offers.find((o) => o.store === b.store) ?? opt.best;
+        const storeAgent = this.agents.get(offer.store);
+        if (!storeAgent) throw new CheckoutError("unknown store");
+        const cart = this.shop.addToCart(
+          s.id,
+          { modelId: opt.modelId, name: opt.name, store: offer.store, storeName: offer.storeName, price: offer.price, coupon: offer.coupon?.code ?? null, discount: offer.coupon?.discount ?? 0, total: offer.final },
+          { agentId: storeAgent.agentId.toString(), address: storeAgent.address },
+        );
+        this.touch(offer.store);
+        end(res, 200, { cart, merchantName: this.shop.merchantName, payTo: cart.payTo, screen: `${this.cfg.webUrl}/shop/${s.id}` });
+        return;
+      }
+      if (parts[3] === "checkout" && !parts[4]) {
+        const payer = String(b.payer ?? "");
+        const payTo = String(b.payTo ?? b.pay_to ?? "");
+        if (!isAddress(payer) || !isAddress(payTo)) throw new CheckoutError("payer and payTo must be 0x addresses the user confirmed");
+        const r = await this.shop.prepare(s.id, { merchantName: String(b.merchantName ?? b.merchant_name ?? ""), payTo: payTo as Address, payer: payer as Address });
+        end(res, 200, r);
+        return;
+      }
+      if (parts[3] === "checkout" && parts[4] === "finalize") {
+        const sig = String(b.signature ?? "");
+        if (!/^0x[0-9a-fA-F]{130}$/.test(sig)) throw new CheckoutError("signature must be a 65-byte 0x hex string");
+        end(res, 200, { checkout: await this.shop.finalize(s.id, sig as `0x${string}`) });
+        return;
+      }
+      if (parts[3] === "checkout" && parts[4] === "submit") {
+        end(res, 200, { checkout: await this.shop.submit(s.id) });
+        return;
+      }
+      end(res, 404, { error: "unknown shop route" });
+    } catch (err) {
+      const status = err instanceof CheckoutError ? err.status : 502;
+      end(res, status, { error: (err as Error).message });
+    }
   }
 
   private async status() {

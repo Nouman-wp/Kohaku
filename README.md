@@ -318,6 +318,10 @@ Copy `.env.example` to `.env`. Every setting is documented there. The ones you a
 | `HSP_APP_KEY` / `HSP_APP_SECRET` | | From HashKey onboarding, merchant mode only |
 | `HSP_BASE_URL` | per network | Defaults to HashKey's QA host on testnet and production on mainnet |
 | `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | | Turns on the Supabase mirror (server side only) |
+| `HSP_AGENTIC_URL` | HSP QA | HSP Agentic Payment, used by the demo stores' checkout (needs an allowlisted IP) |
+| `HSP_MERCHANT_NAME` | `Kohaku` | The team name HSP attributes payments to |
+| `SHOP_DEPOSIT_USD` | `1` | The pre-booking amount the demo checkout charges through HSP |
+| `PUBLIC_WEB_URL` | | The website, for links to the live shopping screen |
 | `GUEST_SESSIONS_PER_HOUR` | `20` | Guest agents for MCP clients (`0` on mainnet) |
 | `ADMIN_TOKEN` | | Protects the scenario runner and admin routes |
 
