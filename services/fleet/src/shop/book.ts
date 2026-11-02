@@ -368,6 +368,15 @@ export class ShopBook {
     return { checkout: c, eip712: prepared.eip712 };
   }
 
+  /** The prepared payment the buyer's wallet still has to sign (the data to sign is not secret). */
+  prepared(id: string): { checkout: Checkout; eip712: HspPrepared["eip712"] } {
+    const s = this.get(id);
+    const p = this.secret.get(id)?.prepared;
+    if (!s?.checkout || !p) throw new CheckoutError("no prepared payment for this session; run checkout first", 404);
+    if (s.checkout.status !== "awaiting-signature") throw new CheckoutError(`the payment is ${s.checkout.status}, not awaiting a signature`);
+    return { checkout: s.checkout, eip712: p.eip712 };
+  }
+
   /** The buyer's wallet signed the eip712 locally; HSP builds the payment mandate. */
   async finalize(id: string, signature: Hex): Promise<Checkout> {
     const s = this.get(id);

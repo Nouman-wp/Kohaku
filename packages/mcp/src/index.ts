@@ -436,8 +436,8 @@ async function main() {
       inputSchema: { session: z.string() },
     },
     async ({ session: id }) => {
-      const p = pending.get(id);
-      if (!p) throw new Error("no prepared payment in this session; call checkout first");
+      // the MCP server may have restarted since checkout: the store keeps the prepared payment
+      const p = pending.get(id) ?? (await fleetCall<{ checkout: CheckoutView; eip712: { domain: Record<string, unknown>; types: Record<string, { name: string; type: string }[]>; primaryType: string; message: Record<string, unknown> } }>(`/shop/sessions/${id}/checkout/prepared`));
       const c = p.checkout;
       if (c.quoteExpiresAt && Date.parse(c.quoteExpiresAt) < Date.now()) throw new Error("the 5-minute HSP quote expired; call checkout again for a fresh quote");
       const balance = (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] })) as bigint;

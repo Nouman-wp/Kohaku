@@ -688,6 +688,10 @@ export class Fleet {
         end(res, 200, s);
         return;
       }
+      if (req.method === "GET" && parts[3] === "checkout" && parts[4] === "prepared") {
+        end(res, 200, this.shop.prepared(s.id));
+        return;
+      }
       if (req.method !== "POST") {
         end(res, 405, { error: "method not allowed" });
         return;
