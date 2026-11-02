@@ -474,13 +474,17 @@ export class ShopBook {
       [14_000, "payment-safe"],
       [20_000, "payment-finalized"],
     ];
-    for (const [delay, status] of steps) {
+    const apply = (status: CheckoutStatus) => {
+      const cur = this.get(id)?.checkout;
+      if (!cur || !cur.simulated) return;
+      cur.status = status;
+      cur.history.push({ at: Date.now(), status, note: "simulated" });
+      this.step(id, "HSP (simulated)", `payment ${status}`);
+    };
+    apply(steps[0]![1]);
+    for (const [delay, status] of steps.slice(1)) {
       setTimeout(() => {
-        const cur = this.get(id)?.checkout;
-        if (!cur || !cur.simulated) return;
-        cur.status = status;
-        cur.history.push({ at: Date.now(), status, note: "simulated" });
-        this.step(id, "HSP (simulated)", `payment ${status}`);
+        apply(status);
       }, delay);
     }
   }

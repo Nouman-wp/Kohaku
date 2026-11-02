@@ -67,7 +67,7 @@ function startSession(s, replay) {
   if (!replay) return;
   out("");
   out(`${time(s.createdAt)}  ${lemon(bold("NEW REQUEST"))}  ${white(`“${s.need}”`)}${s.budgetUsd ? muted(`  budget $${s.budgetUsd}`) : ""}`);
-  out(`${" ".repeat(10)}${muted(`from ${s.buyer?.name ?? "a buyer agent"} · session ${s.id}`)}`);
+  out(`${" ".repeat(12)}${muted(`from ${s.buyer?.name ?? "a buyer agent"} · session ${s.id}`)}`);
 }
 
 function render(s) {
@@ -85,7 +85,7 @@ function render(s) {
     seen.jobs.add(j.jobId);
     if (j.epoch > 0 && !epochs.has(j.epoch)) epochs.set(j.epoch, { phase: null, settled: new Set(), paid: new Set() });
     const pair = `${nameOf(j.buyer, s)} → ${nameOf(j.seller, s)}`;
-    events.push({ at: j.at, o: 1, line: `${time(j.at)}  ${faint(pad("IOU", 6))}${white(pad(pair, 30))}${muted(pad(j.service, 14))}${lemon(pad(usd(j.price), 10))}${faint(j.epoch ? `epoch ${j.epoch} · signed` : "signed")}` });
+    events.push({ at: j.at, o: 1, line: `${time(j.at)}  ${faint(pad("IOU", 8))}${white(pad(pair, 30))}${muted(pad(j.service, 14))}${lemon(pad(usd(j.price), 10))}${faint(j.epoch ? `epoch ${j.epoch} · signed` : "signed")}` });
   }
   const c = s.checkout;
   if (c) {
@@ -93,7 +93,7 @@ function render(s) {
       const sim = /simulated/i.test(h.note) || (c.simulated && h.status.startsWith("payment-"));
       const tag = sim ? amber(" [SIMULATED]") : "";
       const line = h.status === "quote-locked" ? `quote locked: ${h.note}` : h.status === "order-created" ? h.note : `${h.status}${h.note && !/^simulated/.test(h.note) ? `  ${h.note}` : ""}`;
-      events.push({ at: h.at, o: 2, line: `${time(h.at)}  ${sim ? amber(pad("HSP", 6)) : lemon(bold(pad("HSP", 6)))}${sim ? amber(line) : white(line)}${tag}` });
+      events.push({ at: h.at, o: 2, line: `${time(h.at)}  ${sim ? amber(pad("HSP", 8)) : lemon(bold(pad("HSP", 8)))}${sim ? amber(line) : white(line)}${tag}` });
     }
     seen.history = c.history.length;
   }
@@ -104,10 +104,10 @@ function render(s) {
     const gross = s.jobs.reduce((a, j) => a + BigInt(j.price), 0n);
     const agents = new Set(s.jobs.flatMap((j) => [j.buyer, j.seller])).size;
     out(faint("  ─".padEnd(78, "─")));
-    out(`${" ".repeat(10)}${lemon(bold(`${s.jobs.length} paid jobs`))}${muted(` between ${agents} agents · `)}${lemon(usd(gross))}${muted(" in signed IOUs · no money moved yet")}`);
+    out(`${" ".repeat(12)}${lemon(bold(`${s.jobs.length} paid jobs`))}${muted(` between ${agents} agents · `)}${lemon(usd(gross))}${muted(" in signed IOUs · no money moved yet")}`);
     if (s.options?.[0]) {
       const o = s.options[0];
-      out(`${" ".repeat(10)}${muted("top pick: ")}${white(o.name)}${muted(` $${o.best.final.toFixed(2)} at ${o.best.storeName}${o.best.coupon ? ` with ${o.best.coupon.code}` : ""}`)}`);
+      out(`${" ".repeat(12)}${muted("top pick: ")}${white(o.name)}${muted(` $${o.best.final.toFixed(2)} at ${o.best.storeName}${o.best.coupon ? ` with ${o.best.coupon.code}` : ""}`)}`);
     }
     out(faint("  ─".padEnd(78, "─")));
   }
@@ -122,22 +122,23 @@ async function watchEpochs() {
         st.phase = e.phase;
         if (e.phase === "intake") continue;
         const label = { challenge: "intake closed; dispute window open", closing: "netting", sealed: "sealed" }[e.phase] ?? e.phase;
-        out(`${time()}  ${lemon(bold(pad("EPOCH", 6)))}${white(`#${id} ${label}`)}${muted(`  · ${e.iouCount} IOUs from every agent on Kohaku`)}`);
+        const count = Math.max(e.iouCount ?? 0, d.ious?.length ?? 0);
+        out(`${time()}  ${lemon(bold(pad("EPOCH", 8)))}${white(`#${id} ${label}`)}${muted(`  · ${count} IOUs from every agent on Kohaku`)}`);
         if (e.settlementTransfers > 0 || e.phase === "sealed") {
-          out(`${" ".repeat(10)}${lemon(bold(`${e.iouCount} IOUs → ${e.settlementTransfers} net transfers`))}${muted(`  (${e.transfersAvoided} transfers avoided, ${Math.round((e.transferReduction ?? 0) * 100)}% fewer)`)}`);
+          out(`${" ".repeat(12)}${lemon(bold(`${count} IOUs → ${e.settlementTransfers} net transfers`))}${muted(`  (${e.transfersAvoided} transfers avoided, ${Math.round((e.transferReduction ?? 0) * 100)}% fewer)`)}`);
         }
       }
       for (const x of d.settlements ?? []) {
         if (st.settled.has(x.id) || !["verified", "recorded"].includes(x.status)) continue;
         st.settled.add(x.id);
         const via = x.hspMode === "local" ? "Kohaku's HSP gateway (local mode)" : "HSP";
-        out(`${time(x.updatedAt)}  ${lemon(pad("SETTLE", 6))}${white(pad(names.get(x.agentId) ?? `#${x.agentId}`, 18))}${muted("paid ")}${lemon(usd(x.amount))}${muted(` net through ${via}`)}${x.settlementTx ? faint(`  tx ${x.settlementTx.slice(0, 12)}…`) : ""}`);
+        out(`${time(x.updatedAt)}  ${lemon(pad("SETTLE", 8))}${white(pad(names.get(x.agentId) ?? `#${x.agentId}`, 18))}${muted("paid ")}${lemon(usd(x.amount))}${muted(` net through ${via}`)}${x.settlementTx ? faint(`  tx ${x.settlementTx.slice(0, 12)}…`) : ""}`);
       }
       for (const p of d.payouts ?? []) {
         const key = `${p.agentId}`;
         if (st.paid.has(key) || !p.tx) continue;
         st.paid.add(key);
-        out(`${time()}  ${lemon(pad("PAYOUT", 6))}${white(pad(names.get(p.agentId) ?? `#${p.agentId}`, 18))}${muted("received ")}${lemon(usd(p.amount))}${faint(`  tx ${p.tx.slice(0, 12)}…`)}`);
+        out(`${time()}  ${lemon(pad("PAYOUT", 8))}${white(pad(names.get(p.agentId) ?? `#${p.agentId}`, 18))}${muted("received ")}${lemon(usd(p.amount))}${faint(`  tx ${p.tx.slice(0, 12)}…`)}`);
       }
       if (e.phase === "sealed" && e.onchain === "settled") epochs.delete(id);
     } catch {

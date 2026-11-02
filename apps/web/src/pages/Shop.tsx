@@ -583,14 +583,15 @@ function NetBox({ session, epochs }: { session: Session; epochs: number[] }) {
 
 /** Each epoch read from the API: the live map only updates on phase changes. */
 function NetRow({ id, mine }: { id: number; mine: number }) {
-  const { data } = useApi<{ epoch: EpochView }>(`/v1/epochs/${id}`, 5_000);
+  const { data } = useApi<{ epoch: EpochView; ious?: unknown[] }>(`/v1/epochs/${id}`, 5_000);
   const v = data?.epoch;
+  const count = Math.max(v?.iouCount ?? 0, data?.ious?.length ?? 0);
   const netted = v && v.phase !== "intake" && v.phase !== "challenge";
   return (
     <div className="shop-net-row">
       <div>
         <b>{mine}</b> of this request's payments are in <Link to={`/epochs/${id}`}>epoch {id}</Link>
-        {v ? <span className="muted"> with {v.iouCount} IOUs in total from every agent on Kohaku</span> : null}.
+        {v ? <span className="muted"> with {count} IOUs in total from every agent on Kohaku</span> : null}.
       </div>
       <div className="shop-net-result">
         {netted && v ? (
