@@ -478,7 +478,13 @@ async function main() {
       }
       const types = { ...p.eip712.types };
       delete (types as Record<string, unknown>).EIP712Domain;
-      const signature = await agent.account.signTypedData!({ domain: p.eip712.domain, types, primaryType: p.eip712.primaryType, message: p.eip712.message } as never);
+      // HSP sends chainId as hex ("0xaa36a7"); viem drops a non-numeric chainId from the domain
+      // hash, which gives a signature the token contract rejects. Sign the same value as a number.
+      const domain = { ...p.eip712.domain } as Record<string, unknown>;
+      if (typeof domain.chainId === "string") domain.chainId = Number(BigInt(domain.chainId));
+      if (domain.chainId !== c.network.chainId) throw new Error(`HSP asked for a signature on chain ${String(domain.chainId)}, but the order is on chain ${c.network.chainId}; not signing`);
+      if (String(domain.verifyingContract ?? "").toLowerCase() !== c.token.address.toLowerCase()) throw new Error(`HSP asked for a signature for token ${String(domain.verifyingContract)}, not ${c.token.address}; not signing`);
+      const signature = await agent.account.signTypedData!({ domain, types, primaryType: p.eip712.primaryType, message: p.eip712.message } as never);
       const r = await fleetCall<{ checkout: CheckoutView }>(`/shop/sessions/${id}/checkout/finalize`, { signature });
       pending.delete(id);
       const simNote = short

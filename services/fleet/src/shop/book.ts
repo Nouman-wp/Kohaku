@@ -410,8 +410,11 @@ export class ShopBook {
     }
     const types = { ...p.eip712.types } as Record<string, { name: string; type: string }[]>;
     delete types.EIP712Domain;
+    // check against the domain the token contract uses: HSP sends chainId as hex, and viem would
+    // leave a non-numeric chainId out of the hash, so a wrongly made signature would pass here
+    const domain = hspTypedDataDomain(p.eip712.domain);
     const signer = await (recoverTypedDataAddress as (a: Record<string, unknown>) => Promise<Hex>)({
-      domain: p.eip712.domain,
+      domain,
       types,
       primaryType: p.eip712.primaryType,
       message: p.eip712.message,
@@ -582,6 +585,17 @@ export class ShopBook {
       }
     }, 500);
   }
+}
+
+/**
+ * HSP's eip712 domain with a numeric chainId. HSP sends chainId as a hex string ("0xaa36a7");
+ * viem only hashes a chainId that is a number or bigint, so signing or checking the domain as
+ * sent leaves the chain out and gives a signature the token contract rejects (HSP 30009).
+ */
+export function hspTypedDataDomain(domain: Record<string, unknown>): Record<string, unknown> {
+  const d = { ...domain };
+  if (typeof d.chainId === "string") d.chainId = Number(BigInt(d.chainId));
+  return d;
 }
 
 export function round2(n: number): number {
