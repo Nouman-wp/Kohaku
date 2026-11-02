@@ -416,13 +416,15 @@ async function main() {
         { merchantName, payTo, payer },
       );
       pending.set(id, { eip712: r.eip712, checkout: r.checkout });
+      const c = r.checkout;
+      const bal = (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] }).catch(() => 0n)) as bigint;
+      const simulation =
+        c.simulationAllowed && c.tokenTotalRaw && bal < BigInt(c.tokenTotalRaw)
+          ? `Heads up for the user: this wallet holds ${raw(bal.toString(), c.token.decimals)} of HSP's ${c.token.symbol}, less than the quote, so after signing the submission and confirmations will be SIMULATED and labelled; no money moves. The order and quote are real.`
+          : null;
       return text(
-        [
-          "HSP order created and quote locked. Show the user these and wait for explicit approval before calling approve_payment:",
-          review(r.checkout),
-          `Live screen: ${screen(id)}`,
-        ].join("\n"),
-        { ...r.checkout, next: "Show the user the recipient, the payer and token_total_raw (with the USDC amount) and wait for explicit approval before approve_payment." } as unknown as Record<string, unknown>,
+        [simulation, "HSP order created and quote locked. Show the user these and wait for explicit approval before calling approve_payment:", review(c), `Live screen: ${screen(id)}`].filter(Boolean).join("\n"),
+        { ...c, simulation, next: "Show the user the recipient, the payer and token_total_raw (with the USDC amount), mention the simulation note if there is one, and wait for explicit approval before approve_payment." } as unknown as Record<string, unknown>,
       );
     },
   );
