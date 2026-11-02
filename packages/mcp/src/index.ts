@@ -356,7 +356,7 @@ async function main() {
           out.catalogue,
           "Ask the user which option to buy; then call add_to_cart with this session.",
         ].join("\n"),
-        out as unknown as Record<string, unknown>,
+        { ...out, next: "Show the top options briefly with the live screen link, then ask which one to buy and call add_to_cart." } as unknown as Record<string, unknown>,
       );
     },
   );
@@ -391,7 +391,7 @@ async function main() {
           `2. recipient (pay_to): ${r.payTo} (${c.storeName}'s wallet)`,
           `3. payer: ${agent.address} (the user's Kohaku wallet in this session)`,
         ].join("\n"),
-        r as unknown as Record<string, unknown>,
+        { ...r, payer: agent.address, next: `Before checkout, confirm with the user ONE AT A TIME, waiting for each reply: 1) merchant_name "${r.merchantName}", 2) recipient pay_to ${r.payTo} (${r.cart.storeName}'s wallet), 3) payer ${agent.address} (this session's Kohaku wallet). Then call checkout with those values.` } as unknown as Record<string, unknown>,
       );
     },
   );
@@ -422,7 +422,7 @@ async function main() {
           review(r.checkout),
           `Live screen: ${screen(id)}`,
         ].join("\n"),
-        r.checkout as unknown as Record<string, unknown>,
+        { ...r.checkout, next: "Show the user the recipient, the payer and token_total_raw (with the USDC amount) and wait for explicit approval before approve_payment." } as unknown as Record<string, unknown>,
       );
     },
   );
@@ -457,7 +457,7 @@ async function main() {
         : null;
       return text(
         [simNote, "Signed locally and HSP built the payment mandate. Show the user these again and wait for explicit approval before calling submit_payment:", review(r.checkout), `Live screen: ${screen(id)}`].filter(Boolean).join("\n"),
-        r.checkout as unknown as Record<string, unknown>,
+        { ...r.checkout, simulation: simNote, next: "Show the recipient, payer and token_total_raw again and wait for explicit approval before submit_payment." } as unknown as Record<string, unknown>,
       );
     },
   );
@@ -479,7 +479,7 @@ async function main() {
           review(r.checkout),
           `Live screen: ${screen(id)}`,
         ].join("\n"),
-        r.checkout as unknown as Record<string, unknown>,
+        { ...r.checkout, next: r.checkout.simulated ? "Tell the user the payment is simulated (no transaction exists); poll payment_status until payment-finalized and label every status (simulated)." : "Poll payment_status every 15 s until payment-safe or payment-finalized." } as unknown as Record<string, unknown>,
       );
     },
   );
