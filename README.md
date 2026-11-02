@@ -493,7 +493,7 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 - [x] Shopping fleet and the phone demo; the server is on HSP's QA allowlist and checkout orders and quotes run through HSP Agentic Payment
 
 **In progress**
-- [ ] Circle test USDC (Ethereum Sepolia) in the payer wallet, to complete the first checkout payment end to end
+- [x] First real checkout through HSP Agentic Payment: 1.000401 USDC on Ethereum Sepolia, team attribution verified ([tx](https://sepolia.etherscan.io/tx/0x15c848f11d427c1db2438f107d76b2332410bd15ff10468f03951389cb8e8838))
 - [ ] Settle the epochs' net debts through HSP Agentic Payment too (needs a testnet redeploy on HSP's USDC)
 
 **Next**
