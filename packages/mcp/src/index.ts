@@ -319,6 +319,7 @@ async function main() {
     statusReason: string | null;
     simulationAllowed?: boolean;
     simulated?: boolean;
+    chainFinalized?: { block: string; finalizedBlock: string; at: number } | null;
   }
   /** the payer's balance on the network HSP is paying on (the server reads it; may differ from Kohaku's chain) */
   const payerBalance = async (c: CheckoutView): Promise<bigint> => {
@@ -543,9 +544,22 @@ async function main() {
           `Payer address: ${c.payer}`,
           `Transaction hash: ${c.txHash ?? "unavailable"}${c.txHash ? ` (${explorer}/tx/${c.txHash})` : ""}`,
           c.statusReason ? `Reason: ${c.statusReason}` : "",
+          c.chainFinalized
+            ? `On-chain finality (Kohaku's own check, not an HSP status): the payment's block ${c.chainFinalized.block} is finalized on ${c.network.displayName} (finalized block ${c.chainFinalized.finalizedBlock}).`
+            : c.txHash && !c.simulated
+              ? `On-chain finality (Kohaku's own check, not an HSP status): not final yet on ${c.network.displayName}; Ethereum finalizes about 13 minutes after inclusion.`
+              : "",
           `Live screen: ${screen(id)}`,
-        ].join("\n"),
-        c as unknown as Record<string, unknown>,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        {
+          ...c,
+          next:
+            c.status === "payment-safe"
+              ? `HSP's flow ends at payment-safe: report it with HSP's sentence (on chain, half the confirmations, not yet finalized by HSP's definition).${c.chainFinalized ? ` Then add that Kohaku checked the chain and the payment's block is final on ${c.network.displayName}; say this is Kohaku's on-chain check, not an HSP status.` : ""}`
+              : undefined,
+        } as unknown as Record<string, unknown>,
       );
     },
   );

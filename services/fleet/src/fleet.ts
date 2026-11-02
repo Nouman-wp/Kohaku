@@ -224,6 +224,12 @@ export class Fleet {
       simulateUnfunded: this.cfg.shopSimulateUnfunded,
       balanceOf: async (token, who) =>
         (await shopReader.readContract({ address: token as Address, abi: erc20Abi, functionName: "balanceOf", args: [who as Address] })) as bigint,
+      finality: async (hash) => {
+        const receipt = await shopReader.getTransactionReceipt({ hash: hash as `0x${string}` }).catch(() => null);
+        if (!receipt) return null;
+        const finalized = await shopReader.getBlock({ blockTag: "finalized" });
+        return { block: receipt.blockNumber, finalizedBlock: finalized.number ?? 0n, success: receipt.status === "success" };
+      },
     });
     if (!sameChain) this.log("shop", `checkout pays through HSP on chain ${shopChainId}; clearing stays on chain ${clearingCfg.chain.id}`);
 

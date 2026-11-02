@@ -449,8 +449,16 @@ const STAGES: { key: string; label: string; match: (c: Checkout | null, s: Sessi
   { key: "submitted", label: "Submitted to HSP", match: (c) => at(c, "payment-submitted") ?? at(c, "payment-verified") ?? at(c, "payment-processing") },
   { key: "included", label: "In a block", match: (c) => at(c, "payment-included") },
   { key: "safe", label: "Safe (half the confirmations)", match: (c) => at(c, "payment-safe") },
-  { key: "final", label: "Finalized", match: (c) => at(c, "payment-finalized") },
+  // HSP's flow ends at payment-safe; final is HSP's payment-finalized, or Kohaku's own check that
+  // the block is finalized on the payment network
+  { key: "final", label: "Final", match: (c) => at(c, "payment-finalized") ?? at(c, "chain-finalized") },
 ];
+
+function stageLabel(key: string, label: string, c: Checkout | null): string {
+  if (key !== "final" || !c) return label;
+  if (at(c, "payment-finalized")) return "Finalized (HSP)";
+  return `Final on ${c.network.displayName} (checked on chain)`;
+}
 
 function at(c: Checkout | null, status: string): number | null {
   return c?.history.find((h) => h.status === status)?.at ?? null;
@@ -514,7 +522,7 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
             <li key={st.key} className={t ? "done" : next ? (failed ? "failed" : "next") : ""}>
               <span className="shop-tl-dot" aria-hidden />
               <span>
-                {st.label}
+                {stageLabel(st.key, st.label, c)}
                 {c?.simulated && i >= 4 && t ? <span className="shop-sim"> simulated</span> : null}
               </span>
               <time className="muted">{t ? new Date(t).toLocaleTimeString() : next && !failed ? "…" : ""}</time>

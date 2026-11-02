@@ -103,6 +103,12 @@ export interface Checkout {
   simulationAllowed: boolean;
   /** true once the submission and confirmations are simulated: nothing reached HSP's gateway */
   simulated: boolean;
+  /**
+   * Kohaku's own check that the payment's block is final on the payment network. HSP's
+   * documented flow ends at payment-safe, so this never comes from HSP and is never shown as
+   * an HSP status.
+   */
+  chainFinalized?: { block: string; finalizedBlock: string; at: number } | null;
   history: { at: number; status: string; note: string }[];
 }
 
@@ -150,6 +156,7 @@ export class ShopBook {
   private sessions: ShopSession[] = [];
   private secret = new Map<string, Private>();
   private polls = new Map<string, NodeJS.Timeout>();
+  private finality = new Map<string, NodeJS.Timeout>();
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -164,6 +171,8 @@ export class ShopBook {
       log: (m: string) => void;
       simulateUnfunded: boolean;
       balanceOf: (token: string, who: string) => Promise<bigint>;
+      /** the transaction's block and the network's latest finalized block */
+      finality?: (txHash: string) => Promise<{ block: bigint; finalizedBlock: bigint; success: boolean } | null>;
     },
   ) {
     if (existsSync(file)) {
@@ -182,6 +191,7 @@ export class ShopBook {
       }
       if (s.checkout?.simulated && this.isPending(s.checkout.status)) this.finishSimulation(s.id);
       else if (s.checkout && this.isPending(s.checkout.status)) this.poll(s.id);
+      if (s.checkout?.txHash && !s.checkout.simulated && !s.checkout.chainFinalized && Date.now() - s.updatedAt < 6 * 3600_000) this.watchFinality(s.id);
     }
   }
 
@@ -551,6 +561,7 @@ export class ShopBook {
           c.history.push({ at: Date.now(), status, note: tx ? `tx ${tx}` : "" });
           this.step(id, "HSP", `payment ${status}${tx ? ` (tx ${tx.slice(0, 10)}…)` : ""}`);
         }
+        if (c.txHash) this.watchFinality(id);
         this.touch(s);
         if (FINAL.has(c.status)) this.stopPoll(id);
       } catch (err) {
@@ -559,6 +570,52 @@ export class ShopBook {
     };
     this.polls.set(id, setInterval(() => void tick(), 15_000));
     setTimeout(() => void tick(), 4_000);
+  }
+
+  /**
+   * HSP's flow ends at payment-safe (half the confirmations). Kohaku then checks the payment
+   * network itself every 30 s until the transaction's block is at or below the latest
+   * finalized block, and records that as its own on-chain check, separate from HSP's status.
+   */
+  private watchFinality(id: string): void {
+    if (this.finality.has(id) || !this.opts.finality) return;
+    const started = Date.now();
+    const tick = async () => {
+      const s = this.get(id);
+      const c = s?.checkout;
+      if (!s || !c?.txHash || c.simulated || c.chainFinalized || Date.now() - started > 3 * 3600_000) {
+        this.stopFinality(id);
+        return;
+      }
+      try {
+        const f = await this.opts.finality!(c.txHash);
+        if (!f) return;
+        if (!f.success) {
+          c.history.push({ at: Date.now(), status: "chain-reverted", note: `transaction reverted on ${c.network.displayName}` });
+          this.stopFinality(id);
+        } else if (f.block <= f.finalizedBlock) {
+          c.chainFinalized = { block: String(f.block), finalizedBlock: String(f.finalizedBlock), at: Date.now() };
+          c.history.push({
+            at: Date.now(),
+            status: "chain-finalized",
+            note: `final on ${c.network.displayName}: block ${f.block} is at or below finalized block ${f.finalizedBlock} (Kohaku's on-chain check)`,
+          });
+          this.step(id, "Chain", `payment final on ${c.network.displayName} (block ${f.block}), checked on chain`);
+          this.stopFinality(id);
+        }
+        this.touch(s);
+      } catch (err) {
+        this.opts.log(`finality check for ${id} failed: ${(err as Error).message}`);
+      }
+    };
+    this.finality.set(id, setInterval(() => void tick(), 30_000));
+    setTimeout(() => void tick(), 5_000);
+  }
+
+  private stopFinality(id: string): void {
+    const t = this.finality.get(id);
+    if (t) clearInterval(t);
+    this.finality.delete(id);
   }
 
   private stopPoll(id: string): void {

@@ -92,8 +92,10 @@ function render(s) {
     for (const h of c.history.slice(seen.history)) {
       const sim = /simulated/i.test(h.note) || (c.simulated && h.status.startsWith("payment-"));
       const tag = sim ? amber(" [SIMULATED]") : "";
-      const line = h.status === "quote-locked" ? `quote locked: ${h.note}` : h.status === "order-created" ? h.note : `${h.status}${h.note && !/^simulated/.test(h.note) ? `  ${h.note}` : ""}`;
-      events.push({ at: h.at, o: 2, line: `${time(h.at)}  ${sim ? amber(pad("HSP", 8)) : lemon(bold(pad("HSP", 8)))}${sim ? amber(line) : white(line)}${tag}` });
+      const line = h.status === "quote-locked" ? `quote locked: ${h.note}` : h.status === "order-created" ? h.note : h.status.startsWith("chain-") ? h.note : `${h.status}${h.note && !/^simulated/.test(h.note) ? `  ${h.note}` : ""}`;
+      // Kohaku's own on-chain finality check is labelled CHAIN, never HSP
+      const who = h.status.startsWith("chain-") ? "CHAIN" : "HSP";
+      events.push({ at: h.at, o: 2, line: `${time(h.at)}  ${sim ? amber(pad(who, 8)) : lemon(bold(pad(who, 8)))}${sim ? amber(line) : white(line)}${tag}` });
     }
     seen.history = c.history.length;
   }
