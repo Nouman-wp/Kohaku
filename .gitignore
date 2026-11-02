@@ -44,3 +44,6 @@ contracts/broadcast/**/*.lock
 
 # vercel link
 .vercel/
+
+# demo video brief (local only)
+demo-vid.md
