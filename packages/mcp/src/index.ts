@@ -83,10 +83,27 @@ const text = (t: string, structured?: Record<string, unknown>) => ({
   ...(structured ? { structuredContent: structured } : {}),
 });
 
+/** A network blip at startup should not take the server down: retry a few times first. */
+async function retry<T>(what: string, fn: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= attempts) throw err;
+      log(`${what} failed (${(err as Error).message}); retrying`);
+      await new Promise((r) => setTimeout(r, 1_500 * i));
+    }
+  }
+}
+
 async function main() {
-  const cfg = (await fetch(`${API}/v1/config`).then((r) => r.json())) as { chain: { id: number; name: string } };
-  const s = await session(cfg.chain.id);
-  const agent = await KohakuAgent.connect({ privateKey: s.privateKey, clearingUrl: API, agentId: s.agentId ? BigInt(s.agentId) : undefined });
+  const cfg = await retry("reading the clearing config", async () => {
+    const r = await fetch(`${API}/v1/config`, { signal: AbortSignal.timeout(8_000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return (await r.json()) as { chain: { id: number; name: string } };
+  });
+  const s = await retry("opening the session", () => session(cfg.chain.id));
+  const agent = await retry("connecting the agent", () => KohakuAgent.connect({ privateKey: s.privateKey, clearingUrl: API, agentId: s.agentId ? BigInt(s.agentId) : undefined }));
   log(`acting as agent #${agent.agentId} (${agent.address}) on ${cfg.chain.name}`);
 
   // the guest is a buyer, so it will owe money at epoch close: settle through HSP on its own
