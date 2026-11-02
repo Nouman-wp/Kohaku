@@ -44,13 +44,21 @@ console.log(`building for ${site || "(site URL not known yet)"} -> backend ${bac
 execFileSync(shell ? "pnpm.cmd" : "pnpm", ["run", "build"], { cwd: web, env, stdio: "inherit", shell });
 
 // 2. routing: backend paths are proxied, everything else is the single-page app
-const proxied = ["v1", "hsp", "agents", "guest", "guests", "control"];
+const proxied = ["v1", "hsp", "guest", "guests", "control"];
+// agent cards and A2A endpoints live at /agents/<slug>; the site's own agent pages are
+// /agents and /agents/<numeric id>, so only slug paths go to the backend
+const agentSlug = ":slug([a-z][a-z0-9-]*)";
 writeFileSync(
   join(web, "dist", "vercel.json"),
   JSON.stringify(
     {
       cleanUrls: false,
-      rewrites: [...proxied.map((p) => ({ source: `/${p}/:path*`, destination: `${backend}/${p}/:path*` })), { source: "/(.*)", destination: "/index.html" }],
+      rewrites: [
+        ...proxied.map((p) => ({ source: `/${p}/:path*`, destination: `${backend}/${p}/:path*` })),
+        { source: `/agents/${agentSlug}`, destination: `${backend}/agents/:slug` },
+        { source: `/agents/${agentSlug}/:path*`, destination: `${backend}/agents/:slug/:path*` },
+        { source: "/(.*)", destination: "/index.html" },
+      ],
       headers: [{ source: "/assets/(.*)", headers: [{ key: "cache-control", value: "public, max-age=31536000, immutable" }] }],
     },
     null,
