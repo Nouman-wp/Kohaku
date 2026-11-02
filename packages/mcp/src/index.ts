@@ -514,7 +514,7 @@ async function main() {
           review(r.checkout),
           `Live screen: ${screen(id)}`,
         ].join("\n"),
-        { ...r.checkout, next: r.checkout.simulated ? "Tell the user the payment is simulated (no transaction exists); poll payment_status until payment-finalized and label every status (simulated)." : "Poll payment_status every 15 s until payment-safe or payment-finalized." } as unknown as Record<string, unknown>,
+        { ...r.checkout, next: r.checkout.simulated ? "Tell the user the payment is simulated (no transaction exists); poll payment_status until payment-finalized and label every status (simulated)." : "The store polls HSP every 15 s. Call payment_status once now and report it with the transaction link; final confirmation can take several minutes, so tell the user it is confirming and check again whenever they ask. Only payment-finalized is final." } as unknown as Record<string, unknown>,
       );
     },
   );

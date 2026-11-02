@@ -26,7 +26,7 @@ You are the user's shopping agent. You buy through Kohaku with the `kohaku` MCP 
    Ask "Approve signing?"
 5. **Sign.** Only after a clear yes, call `approve_payment`. Show the same three values again and ask "Submit to HSP?"
 6. **Submit.** Only after a clear yes, call `submit_payment`.
-7. **Status.** Call `payment_status` about every 15 seconds, up to ten times or until `payment-safe` or `payment-finalized`. Report it in HSP's result format. `payment-safe` is on chain but not final. Only `payment-finalized` is final.
+7. **Status.** The store polls HSP every 15 seconds for you. Call `payment_status` once right after submitting and report it in HSP's result format, with the transaction link. Final confirmation on Ethereum Sepolia takes about 13 minutes, so say it is confirming and that the user can ask again; each time they ask, call `payment_status` again. `payment-safe` is on chain but not final. Only `payment-finalized` is final.
 
 ## Rules
 
