@@ -66,7 +66,7 @@ interface Checkout {
   payer: string;
   amountUsd: string;
   token: { address: string; symbol: string; decimals: number };
-  network: { chainId: number; name: string; displayName: string };
+  network: { chainId: number; name: string; displayName: string; explorer?: string | null };
   flowId: string;
   paymentRequestId: string;
   tokenTotalRaw: string | null;
@@ -467,6 +467,8 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
     );
   }
   const reached = STAGES.map((st) => st.match(c, session));
+  // HSP may pay on another network than Kohaku's (SHOP_CHAIN_ID): link to that network's explorer
+  const txExplorer = c?.network.explorer ?? explorer;
   const failed = c && (c.status === "payment-failed" || c.status === "error" || c.status === "quote-expired");
   return (
     <div>
@@ -536,6 +538,7 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
           <dt>Amount</dt>
           <dd>
             ${c.amountUsd} · {c.tokenTotalRaw ? `${c.tokenTotalRaw} raw ${c.token.symbol}` : "quote pending"}
+            <span className="muted"> on {c.network.displayName}</span>
             {c.quoteExpiresAt && c.status === "awaiting-signature" && <span className="muted"> · quote {Date.parse(c.quoteExpiresAt) > now ? `expires in ${clock(Date.parse(c.quoteExpiresAt) - now)}` : "expired"}</span>}
           </dd>
           <dt>Payer</dt>
@@ -546,8 +549,8 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
             <>
               <dt>Transaction</dt>
               <dd className="mono">
-                {explorer ? (
-                  <a className="text-link" href={`${explorer.replace(/\/+$/, "")}/tx/${c.txHash}`} target="_blank" rel="noreferrer">
+                {txExplorer ? (
+                  <a className="text-link" href={`${txExplorer.replace(/\/+$/, "")}/tx/${c.txHash}`} target="_blank" rel="noreferrer">
                     {short(c.txHash, 8)}
                   </a>
                 ) : (

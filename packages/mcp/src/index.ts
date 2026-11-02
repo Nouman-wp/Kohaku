@@ -306,7 +306,9 @@ async function main() {
     payer: string;
     amountUsd: string;
     token: { address: string; symbol: string; decimals: number; protocol: string };
-    network: { chainId: number; name: string; displayName: string };
+    network: { chainId: number; name: string; displayName: string; explorer?: string | null };
+    faucet?: string | null;
+    payerBalanceRaw?: string | null;
     flowId: string;
     paymentRequestId: string;
     tokenTotalRaw: string | null;
@@ -318,6 +320,14 @@ async function main() {
     simulationAllowed?: boolean;
     simulated?: boolean;
   }
+  /** the payer's balance on the network HSP is paying on (the server reads it; may differ from Kohaku's chain) */
+  const payerBalance = async (c: CheckoutView): Promise<bigint> => {
+    if (c.payerBalanceRaw != null) return BigInt(c.payerBalanceRaw);
+    if (c.network.chainId !== cfg.chain.id) return 0n;
+    return (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] }).catch(() => 0n)) as bigint;
+  };
+  const fundHint = (c: CheckoutView) =>
+    c.faucet ? `Test ${c.token.symbol} for ${c.network.displayName}: ${c.faucet}, to ${c.payer}.` : `The team has to fund ${c.payer} with HSP's ${c.token.symbol} on ${c.network.displayName}.`;
   const pending = new Map<string, { eip712: { domain: Record<string, unknown>; types: Record<string, { name: string; type: string }[]>; primaryType: string; message: Record<string, unknown> }; checkout: CheckoutView }>();
   const review = (c: CheckoutView) =>
     [
@@ -434,10 +444,10 @@ async function main() {
       );
       pending.set(id, { eip712: r.eip712, checkout: r.checkout });
       const c = r.checkout;
-      const bal = (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] }).catch(() => 0n)) as bigint;
+      const bal = await payerBalance(c);
       const simulation =
         c.simulationAllowed && c.tokenTotalRaw && bal < BigInt(c.tokenTotalRaw)
-          ? `Heads up for the user: this wallet holds ${raw(bal.toString(), c.token.decimals)} of HSP's ${c.token.symbol}, less than the quote, so after signing the submission and confirmations will be SIMULATED and labelled; no money moves. The order and quote are real.`
+          ? `Heads up for the user: this wallet holds ${raw(bal.toString(), c.token.decimals)} ${c.token.symbol} on ${c.network.displayName}, less than the quote, so after signing the submission and confirmations will be SIMULATED and labelled; no money moves. The order and quote are real.`
           : null;
       return text(
         [simulation, "HSP order created and quote locked. Show the user these and wait for explicit approval before calling approve_payment:", review(c), `Live screen: ${screen(id)}`].filter(Boolean).join("\n"),
@@ -459,11 +469,11 @@ async function main() {
       const p = pending.get(id) ?? (await fleetCall<{ checkout: CheckoutView; eip712: { domain: Record<string, unknown>; types: Record<string, { name: string; type: string }[]>; primaryType: string; message: Record<string, unknown> } }>(`/shop/sessions/${id}/checkout/prepared`));
       const c = p.checkout;
       if (c.quoteExpiresAt && Date.parse(c.quoteExpiresAt) < Date.now()) throw new Error("the 5-minute HSP quote expired; call checkout again for a fresh quote");
-      const balance = (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] })) as bigint;
+      const balance = await payerBalance(c);
       const short = !!c.tokenTotalRaw && balance < BigInt(c.tokenTotalRaw);
       if (short && !c.simulationAllowed) {
         return text(
-          `Not signing: ${agent.address} holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol} (${c.token.address}) but the payment needs ${raw(c.tokenTotalRaw, c.token.decimals)}. The team has to fund this wallet with HSP's ${c.token.symbol} by hand, then call checkout again for a fresh quote.`,
+          `Not signing: ${agent.address} holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol} (${c.token.address}) on ${c.network.displayName} but the payment needs ${raw(c.tokenTotalRaw, c.token.decimals)}. ${fundHint(c)} Then call checkout again for a fresh quote.`,
         );
       }
       const types = { ...p.eip712.types };
@@ -472,7 +482,7 @@ async function main() {
       const r = await fleetCall<{ checkout: CheckoutView }>(`/shop/sessions/${id}/checkout/finalize`, { signature });
       pending.delete(id);
       const simNote = short
-        ? `SIMULATION: this wallet holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol}, less than the quote, so the store will simulate the submission and confirmations. Tell the user plainly that the payment step is simulated and no funds move.`
+        ? `SIMULATION: this wallet holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol} on ${c.network.displayName}, less than the quote, so the store will simulate the submission and confirmations. Tell the user plainly that the payment step is simulated and no funds move.`
         : null;
       return text(
         [simNote, "Signed locally and HSP built the payment mandate. Show the user these again and wait for explicit approval before calling submit_payment:", review(r.checkout), `Live screen: ${screen(id)}`].filter(Boolean).join("\n"),
@@ -493,7 +503,7 @@ async function main() {
       return text(
         [
           r.checkout.simulated
-            ? `SIMULATED HSP payment: ${r.checkout.status}. Nothing was submitted to HSP's gateway (the payer holds no HSP test USDC); the confirmations on the live screen are simulated and labelled.`
+            ? `SIMULATED HSP payment: ${r.checkout.status}. Nothing was submitted to HSP's gateway (the payer holds less ${r.checkout.token.symbol} than the quote); the confirmations on the live screen are simulated and labelled.`
             : `HSP status: ${r.checkout.status}. This is not final confirmation yet; the server polls HSP every 15 s and the live screen updates.`,
           review(r.checkout),
           `Live screen: ${screen(id)}`,
@@ -514,14 +524,14 @@ async function main() {
       const sess = await fleetCall<{ checkout: CheckoutView | null; cart: { storeName: string; total: number } | null }>(`/shop/sessions/${id}`);
       const c = sess.checkout;
       if (!c) return text(sess.cart ? `Cart at ${sess.cart.storeName} ($${sess.cart.total.toFixed(2)}); no checkout yet.` : "No cart yet.");
-      const explorer = cfg.chain.id === 133 ? "https://testnet-explorer.hskchain.net" : "https://hashkey.blockscout.com";
+      const explorer = c.network.explorer ?? (cfg.chain.id === 133 ? "https://testnet-explorer.hskchain.net" : "https://hashkey.blockscout.com");
       return text(
         [
           c.simulated ? "HSP Agentic Payment — SIMULATED (no transaction was submitted)" : "HSP Agentic Payment — QA result",
           `Payment status: ${c.status}${c.simulated ? " (simulated)" : ""}`,
           `Hackathon team: ${c.merchantName}`,
           `Team attribution verified: ${c.attributionVerified ?? "unavailable"}`,
-          `Network: ${c.network.name}`,
+          `Network: ${c.network.name} (${c.network.displayName}, chain ${c.network.chainId})`,
           `Raw authorization amount (raw units): ${c.tokenTotalRaw ?? "unavailable"}`,
           `Recipient address: ${c.payTo}`,
           `Payer address: ${c.payer}`,

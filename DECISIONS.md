@@ -404,4 +404,18 @@ why. Newest decisions are at the bottom of each section.
   - Every simulated status is labelled on the screen, in the terminal view and in Claude's replies,
     and no transaction hash is invented. A funded payer goes through the real gateway with the
     setting on.
+- **Update (2 Nov, later): the checkout pays on Ethereum Sepolia.**
+  - HashKey's hackathon team pointed builders at Circle's test USDC on Ethereum Sepolia
+    (faucet.circle.com) for payment testing. HSP's QA `get_chain_config` lists that token
+    (`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`, EIP-3009), as well as Base Sepolia, Arbitrum
+    Sepolia and BSC testnet.
+  - A probe order on Sepolia from the allowlisted server got a real quote: $1 became 1.000301 USDC,
+    gas fee included. The payer signs `TransferWithAuthorization` and HSP's relayer submits it, so
+    the payer needs USDC only, not Sepolia ETH.
+  - `SHOP_CHAIN_ID=11155111` points only the shopping checkout there. The clearing house, the IOUs,
+    netting, collateral and the epoch settlements all stay on HashKey Chain testnet. That keeps
+    "built on HashKey Chain" true and puts a real HSP payment in the demo.
+  - `SHOP_CHAIN_ID=133` switches back the day HSP's HashKey testnet USDC arrives. Mainnet would use
+    HSP's USDC on HashKey Chain (177).
+  - The simulation stays as a labelled fallback while the payer holds less than the quote.
 

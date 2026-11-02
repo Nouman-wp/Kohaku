@@ -21,7 +21,8 @@ import { HspAgentic } from "./shop/hsp-agentic.ts";
 import { CheckoutError, ShopBook } from "./shop/book.ts";
 import { join } from "node:path";
 import { REPO_ROOT } from "./config.ts";
-import { isAddress, type Address } from "viem";
+import { createPublicClient, http, isAddress, type Address } from "viem";
+import { SHOP_CHAINS } from "./shop/chains.ts";
 import type { AgentSummary as Summary } from "@kohaku/core";
 import { erc20Abi } from "@kohaku/core/abis";
 
@@ -205,15 +206,26 @@ export class Fleet {
     this.rogueOperator = new Operator(clearingCfg, this.cfg.rogueOperatorKey, this.cfg.rpcUrl);
     this.chainId = clearingCfg.chain.id;
     const hsp = new HspAgentic(this.cfg.hspAgenticUrl, this.cfg.merchantName, (m) => this.log("hsp", m));
+    // the checkout can pay on another HSP network (SHOP_CHAIN_ID); clearing stays on this chain
+    const shopChainId = this.cfg.shopChainId ?? clearingCfg.chain.id;
+    const known = SHOP_CHAINS[shopChainId];
+    const sameChain = shopChainId === clearingCfg.chain.id;
+    const shopReader = sameChain
+      ? this.operator.publicClient
+      : createPublicClient({ transport: http(this.cfg.shopRpcUrl ?? known?.rpc ?? "", { timeout: 10_000 }) });
+    if (!sameChain && !this.cfg.shopRpcUrl && !known) throw new Error(`SHOP_CHAIN_ID ${shopChainId} has no known RPC; set SHOP_RPC_URL`);
     this.shop = new ShopBook(join(REPO_ROOT, ".data", `shop-${this.cfg.chain}-${clearingCfg.chain.id}.json`), hsp, {
-      chainId: clearingCfg.chain.id,
+      chainId: shopChainId,
+      explorer: sameChain ? (clearingCfg.chain.explorer ?? known?.explorer ?? null) : (known?.explorer ?? null),
+      faucet: known?.faucet ?? null,
       tokenSymbol: this.cfg.shopToken,
       depositUsd: this.cfg.shopDepositUsd,
       log: (m) => this.log("shop", m),
       simulateUnfunded: this.cfg.shopSimulateUnfunded,
       balanceOf: async (token, who) =>
-        (await this.operator.publicClient.readContract({ address: token as Address, abi: erc20Abi, functionName: "balanceOf", args: [who as Address] })) as bigint,
+        (await shopReader.readContract({ address: token as Address, abi: erc20Abi, functionName: "balanceOf", args: [who as Address] })) as bigint,
     });
+    if (!sameChain) this.log("shop", `checkout pays through HSP on chain ${shopChainId}; clearing stays on chain ${clearingCfg.chain.id}`);
 
     // 1. agents with keys and cards, served before registration so the cards resolve
     for (const m of MEMBERS) {
@@ -689,7 +701,7 @@ export class Fleet {
         return;
       }
       if (req.method === "GET" && parts[3] === "checkout" && parts[4] === "prepared") {
-        end(res, 200, this.shop.prepared(s.id));
+        end(res, 200, await this.shop.prepared(s.id));
         return;
       }
       if (req.method !== "POST") {

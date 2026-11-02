@@ -327,7 +327,9 @@ Copy `.env.example` to `.env`. Every setting is documented there. The ones you a
 | `HSP_AGENTIC_URL` | HSP QA | HSP Agentic Payment, used by the demo stores' checkout (needs an allowlisted IP) |
 | `HSP_MERCHANT_NAME` | `Kohaku` | The team name HSP attributes payments to |
 | `SHOP_DEPOSIT_USD` | `1` | The pre-booking amount the demo checkout charges through HSP |
-| `SHOP_SIMULATE_UNFUNDED` | off | Simulate (and label) the HSP submission when the payer holds no HSP test USDC |
+| `SHOP_CHAIN_ID` | the deployment's chain | The HSP network the checkout pays on. Testnet uses `11155111` (Ethereum Sepolia, Circle's test USDC); clearing stays on HashKey Chain |
+| `SHOP_RPC_URL` | public RPC | RPC for the payer balance check on `SHOP_CHAIN_ID` |
+| `SHOP_SIMULATE_UNFUNDED` | off | Simulate (and label) the HSP submission when the payer can't cover HSP's quote |
 | `PUBLIC_WEB_URL` | | The website, for links to the live shopping screen |
 | `GUEST_SESSIONS_PER_HOUR` | `20` | Guest agents for MCP clients (`0` on mainnet) |
 | `ADMIN_TOKEN` | | Protects the scenario runner and admin routes |
@@ -351,7 +353,7 @@ The phone demo makes Claude the user's agent. The user asks for something, and a
 3. **Watch.** [kohaku.caspx.in/shop](https://kohaku.caspx.in/shop) shows who hired whom, every payment between agents, the ranked options, the cart and the checkout.
 4. **Buy.** The user picks a phone and Claude adds it to the cart. Claude confirms the merchant name, the store's wallet and the payer, one at a time. Then it checks out through **HSP Agentic Payment**: the store opens the order from Kohaku's allowlisted server, the user's wallet signs HSP's EIP-712 data locally, and HSP builds, submits and confirms the payment.
 
-To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `node scripts/watch.mjs` follows the same request in a terminal: every agent step, every IOU, the HSP checkout and how the epoch nets and settles. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking in HSP's test USDC; fund the payer with `node scripts/fund-payer.mjs testnet 20`.
+To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `node scripts/watch.mjs` follows the same request in a terminal: every agent step, every IOU, the HSP checkout and how the epoch nets and settles. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking through HSP in Circle's test USDC on Ethereum Sepolia: claim it for the payer at [faucet.circle.com](https://faucet.circle.com), and check it with `node scripts/fund-payer.mjs testnet`.
 
 | Tool | What it does |
 |---|---|
@@ -491,7 +493,7 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 - [x] Shopping fleet and the phone demo; the server is on HSP's QA allowlist and checkout orders and quotes run through HSP Agentic Payment
 
 **In progress**
-- [ ] HSP test USDC for the payer wallet, to complete the first checkout payment end to end
+- [ ] Circle test USDC (Ethereum Sepolia) in the payer wallet, to complete the first checkout payment end to end
 - [ ] Settle the epochs' net debts through HSP Agentic Payment too (needs a testnet redeploy on HSP's USDC)
 
 **Next**

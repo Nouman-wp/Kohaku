@@ -84,6 +84,10 @@ HSP_GATEWAY_RELAYER_KEY=
 # charges a SHOP_DEPOSIT_USD pre-booking amount in HSP's SHOP_TOKEN.
 HSP_AGENTIC_URL=https://mcp-qa.hashkeymerchant.com/
 SHOP_TOKEN=USDC
+# the HSP network the checkout pays on; empty = this chain. 11155111 = Ethereum Sepolia, where
+# HSP takes Circle's test USDC (https://faucet.circle.com). Clearing stays on HashKey Chain.
+SHOP_CHAIN_ID=${testnet ? "11155111" : ""}
+SHOP_RPC_URL=
 SHOP_DEPOSIT_USD=1
 # 1 = simulate (and label) the submission when the payer cannot cover HSP's quote
 SHOP_SIMULATE_UNFUNDED=

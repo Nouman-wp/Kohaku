@@ -84,7 +84,11 @@ export interface Checkout {
   payer: string;
   amountUsd: string;
   token: { address: string; symbol: string; decimals: number; protocol: string };
-  network: { chainId: number; name: string; displayName: string };
+  network: { chainId: number; name: string; displayName: string; explorer?: string | null };
+  /** where to get the test token on this network, when there is a public faucet */
+  faucet?: string | null;
+  /** the payer's balance of the token on the payment network, read by the server */
+  payerBalanceRaw?: string | null;
   orderId: string;
   flowId: string;
   paymentRequestId: string;
@@ -153,6 +157,8 @@ export class ShopBook {
     private readonly hsp: HspAgentic,
     private readonly opts: {
       chainId: number;
+      explorer: string | null;
+      faucet: string | null;
       tokenSymbol: string;
       depositUsd: string;
       log: (m: string) => void;
@@ -337,7 +343,9 @@ export class ShopBook {
         payer,
         amountUsd: amount,
         token: { address: token.address, symbol: token.symbol, decimals: token.decimals, protocol: token.payment_protocol },
-        network: { chainId: network.chain_id, name: network.name, displayName: network.display_name },
+        network: { chainId: network.chain_id, name: network.name, displayName: network.display_name, explorer: this.opts.explorer },
+        faucet: this.opts.faucet,
+        payerBalanceRaw: null,
         orderId,
         flowId: order.flow_id,
         paymentRequestId: order.payment_request_id,
@@ -362,19 +370,30 @@ export class ShopBook {
     c.quoteExpiresAt = prepared.quote_expires_at ?? null;
     c.statusReason = null;
     if (prepared.pay_to && !isAddressEqual(prepared.pay_to as Hex, c.payTo as Hex)) throw new CheckoutError("HSP quoted a different recipient; refusing");
-    c.history.push({ at: Date.now(), status: "quote-locked", note: `${c.tokenTotalRaw} raw ${c.token.symbol} until ${c.quoteExpiresAt ?? "?"}` });
+    c.history.push({ at: Date.now(), status: "quote-locked", note: `${c.tokenTotalRaw} raw ${c.token.symbol} on ${c.network.displayName} until ${c.quoteExpiresAt ?? "?"}` });
+    await this.readBalance(c);
     this.step(s.id, "HSP", `quote locked: ${formatRaw(c.tokenTotalRaw, c.token.decimals)} ${c.token.symbol}, waiting for the payer's approval`);
     this.touch(s);
     return { checkout: c, eip712: prepared.eip712 };
   }
 
   /** The prepared payment the buyer's wallet still has to sign (the data to sign is not secret). */
-  prepared(id: string): { checkout: Checkout; eip712: HspPrepared["eip712"] } {
+  async prepared(id: string): Promise<{ checkout: Checkout; eip712: HspPrepared["eip712"] }> {
     const s = this.get(id);
     const p = this.secret.get(id)?.prepared;
     if (!s?.checkout || !p) throw new CheckoutError("no prepared payment for this session; run checkout first", 404);
     if (s.checkout.status !== "awaiting-signature") throw new CheckoutError(`the payment is ${s.checkout.status}, not awaiting a signature`);
+    await this.readBalance(s.checkout);
     return { checkout: s.checkout, eip712: p.eip712 };
+  }
+
+  /** The payer's token balance on the payment network, for the buyer's agent to check. */
+  private async readBalance(c: Checkout): Promise<void> {
+    try {
+      c.payerBalanceRaw = String(await this.opts.balanceOf(c.token.address, c.payer));
+    } catch (err) {
+      this.opts.log(`balance check on ${c.network.name} failed: ${(err as Error).message}`);
+    }
   }
 
   /** The buyer's wallet signed the eip712 locally; HSP builds the payment mandate. */
@@ -460,6 +479,7 @@ export class ShopBook {
   private async simulating(c: Checkout): Promise<boolean> {
     if (!this.opts.simulateUnfunded || !c.tokenTotalRaw) return false;
     const bal = await this.opts.balanceOf(c.token.address, c.payer).catch(() => 0n);
+    c.payerBalanceRaw = String(bal);
     return bal < BigInt(c.tokenTotalRaw);
   }
 
@@ -474,7 +494,7 @@ export class ShopBook {
     if (!s || !c) return;
     c.simulated = true;
     c.txHash = null;
-    c.statusReason = "Simulated: the payer holds no HSP test USDC yet, so nothing was submitted to HSP's gateway and no transaction exists.";
+    c.statusReason = `Simulated: the payer holds less ${c.token.symbol} on ${c.network.displayName} than HSP's quote, so nothing was submitted to HSP's gateway and no transaction exists.`;
     const steps: [number, CheckoutStatus][] = [
       [0, "payment-submitted"],
       [2_500, "payment-verified"],

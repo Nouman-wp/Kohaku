@@ -46,6 +46,10 @@ export interface FleetConfig {
   hspAgenticUrl: string;
   merchantName: string;
   shopToken: string;
+  /** the HSP network the shopping checkout pays on; null = the clearing house's chain */
+  shopChainId: number | null;
+  /** RPC for payer balance checks on that network (defaults to a public one) */
+  shopRpcUrl?: string;
   shopDepositUsd: string;
   /** simulate (and label) the HSP submission when the payer cannot fund the quote */
   shopSimulateUnfunded: boolean;
@@ -84,6 +88,8 @@ export function loadFleetConfig(): FleetConfig {
     hspAgenticUrl: e.HSP_AGENTIC_URL ?? "https://mcp-qa.hashkeymerchant.com/",
     merchantName: e.HSP_MERCHANT_NAME ?? "Kohaku",
     shopToken: e.SHOP_TOKEN ?? "USDC",
+    shopChainId: e.SHOP_CHAIN_ID ? Number(e.SHOP_CHAIN_ID) : null,
+    shopRpcUrl: e.SHOP_RPC_URL || undefined,
     shopDepositUsd: Number(e.SHOP_DEPOSIT_USD ?? 1).toFixed(2),
     shopSimulateUnfunded: ["1", "on", "true"].includes(String(e.SHOP_SIMULATE_UNFUNDED ?? "").toLowerCase()),
   };
