@@ -11,15 +11,17 @@
 </p>
 
 <p align="center">
+  <a href="https://youtu.be/chVzaUHNrvk" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/demo-watch%20on%20YouTube-ff0000?logo=youtube&logoColor=white" alt="Watch the demo on YouTube" /></a>
   <a href="https://github.com/Nouman-wp/Kohaku/actions/workflows/ci.yml"><img src="https://github.com/Nouman-wp/Kohaku/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/HashKey%20Chain-testnet%20133-9382ff" alt="HashKey Chain testnet" />
   <img src="https://img.shields.io/badge/settlement-HSP-7c5cff" alt="Settled through HSP" />
-  <img src="https://img.shields.io/badge/tests-112%20passing-2ea44f" alt="112 tests passing" />
+  <img src="https://img.shields.io/badge/tests-125%20passing-2ea44f" alt="125 tests passing" />
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" />
 </p>
 
 <p align="center">
-  <a href="https://kohaku.caspx.in"><b>Website</b></a> ·
+  <a href="https://youtu.be/chVzaUHNrvk" target="_blank" rel="noopener noreferrer"><b>Demo video</b></a> ·
+  <a href="https://kohaku.caspx.in" target="_blank" rel="noopener noreferrer"><b>Live website</b></a> ·
   <a href="#run-it-in-one-command"><b>Run it locally</b></a> ·
   <a href="#hsp-settlement"><b>How HSP fits</b></a> ·
   <a href="docs/DEPLOY.md"><b>Deploy guide</b></a> ·
@@ -27,7 +29,11 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/floor.webp" alt="The live clearing floor: the debt graph between agents and signed IOUs arriving in real time" />
+  <a href="https://youtu.be/chVzaUHNrvk" target="_blank" rel="noopener noreferrer">
+    <img src="docs/screenshots/demo-video.webp" width="100%" alt="Watch the Kohaku demo on YouTube (2:51): 65 payments between AI agents netted into 9 transfers on HashKey Chain" />
+  </a>
+  <br/>
+  <sub><b><a href="https://youtu.be/chVzaUHNrvk" target="_blank" rel="noopener noreferrer">▶ Watch the 2:51 demo on YouTube</a></b>. One prompt to Claude, 65 paid jobs between 9 agents, a real payment through HSP, and the netting on HashKey Chain. Every number in it comes from one recorded run on 2 Nov 2026.</sub>
 </p>
 
 > Built for the **HashKey Chain Horizon Hackathon**, Track 2: **Agent Payments and A2A Settlement (HSP)**.
@@ -43,10 +49,11 @@
 - **Bad work gets refunded.** A buyer can dispute a delivery. A staked validator re-checks it, and an upheld dispute voids the IOU before netting and cuts the seller's ERC-8004 reputation.
 - **Anyone can check it.** Every settlement traces back to a single $0.0004 job, and the **Verify** page redoes an epoch's netting in your browser against the chain.
 
-In the local run shown in the screenshots, epoch 1 netted **70 IOUs into 7 transfers (90% fewer)**. The hero bar of the same run showed 369 jobs cleared, with 95% of transfers avoided.
+In the demo run, one request from Claude set off **65 paid jobs between 9 agents in 3.1 seconds**, and epoch 133 netted them into **9 transfers on HashKey Chain (86% fewer)**. On 2 Nov 2026 the live testnet ledger held **2,838 signed IOUs across 141 sealed epochs**, with 2,097 transfers avoided (74% fewer than paying per call).
 
 ## Contents
 
+- [Watch the demo](#watch-the-demo)
 - [The problem](#the-problem)
 - [How it works](#how-it-works)
 - [See it](#see-it)
@@ -55,6 +62,7 @@ In the local run shown in the screenshots, epoch 1 netted **70 IOUs into 7 trans
 - [The agent fleet](#the-agent-fleet)
 - [Live on HashKey Chain testnet](#live-on-hashkey-chain-testnet)
 - [Run it in one command](#run-it-in-one-command)
+- [Shop from your phone (Claude + HSP)](#shop-from-your-phone-claude--hsp)
 - [Use it from Claude (MCP)](#use-it-from-claude-mcp)
 - [Build your own agent](#build-your-own-agent)
 - [Guarantees and tests](#guarantees-and-tests)
@@ -62,6 +70,62 @@ In the local run shown in the screenshots, epoch 1 netted **70 IOUs into 7 trans
 - [What is real and what is not](#what-is-real-and-what-is-not)
 - [Status and roadmap](#status-and-roadmap)
 - [Repository](#repository)
+
+## Watch the demo
+
+<a href="https://youtu.be/chVzaUHNrvk" target="_blank" rel="noopener noreferrer"><b>▶ Kohaku: the clearing house for the agent economy</b></a> (2:51, YouTube). The user asks Claude on their phone: *"Find me a phone under $500 with a great camera, and get me the best coupon."* Claude hires Kohaku's Concierge, the Concierge hires a team, every call is paid with a signed IOU, the purchase goes through HSP, and the epoch nets everything on HashKey Chain.
+
+| Time | Chapter |
+|---|---|
+| [0:00](https://youtu.be/chVzaUHNrvk?t=0) | Don't ask AI. Hire it. |
+| [0:33](https://youtu.be/chVzaUHNrvk?t=33) | Meet Kohaku: agents hiring agents |
+| [0:57](https://youtu.be/chVzaUHNrvk?t=57) | Every call is paid: 65 signed IOUs in 3.1 s |
+| [1:11](https://youtu.be/chVzaUHNrvk?t=71) | The pick: Pixel 10a, $449 with CAMERA30 |
+| [1:20](https://youtu.be/chVzaUHNrvk?t=80) | A real payment through HSP |
+| [1:40](https://youtu.be/chVzaUHNrvk?t=100) | 65 payments, 9 transfers: netting on HashKey Chain |
+| [2:00](https://youtu.be/chVzaUHNrvk?t=120) | Trust you can check: ERC-8004 reputation and disputes |
+| [2:17](https://youtu.be/chVzaUHNrvk?t=137) | Under the hood |
+| [2:32](https://youtu.be/chVzaUHNrvk?t=152) | Build on it: plug Kohaku into Claude with MCP |
+
+### The recorded run (2 Nov 2026), and where to check it
+
+| What | Result | Check it |
+|---|---|---|
+| Research | **65 paid jobs between 9 agents in 3.1 s**, $0.0909 of signed IOUs. Pricewise bought 24 quotes from three stores, Scout read live spec sheets from Wikipedia, Clipper tested 30 coupon codes, Scribe wrote it up | [Live shopping screen](https://kohaku.caspx.in/shop/shop_e1fef2b9d988) |
+| Answer | Google Pixel 10a, **$449** at Harbor Mobile ($479 − $30 with `CAMERA30`), delivered in 1 day | Same screen, ranked options |
+| Netting | Epoch 133: **65 IOUs → 9 transfers** (56 avoided, 86% fewer), $0.0715 net, 3 debtors and 6 creditors | [Epoch 133 receipt](https://kohaku.caspx.in/epochs/133) · [re-check it in your browser](https://kohaku.caspx.in/verify?epoch=133) |
+| On HashKey Chain | Finalize and payout by `KohakuClearingHouse` on testnet (chain 133) | [finalize tx](https://testnet-explorer.hskchain.net/tx/0xcc1d3be357ba58e8bbd8caffeb2a708cde1e9dd158f72e0ca996fd3c1210f1b1) · [payout tx](https://testnet-explorer.hskchain.net/tx/0xb09393acd230da3a07f1042b1ec30a3a42c53e24705afd951a7081ab9516e61e) |
+| Purchase through HSP | **HSP Agentic Payment** (QA): merchant Kohaku, team attribution verified. A $1 pre-booking, **1.000301 test USDC** with the network fee, signed locally by the payer's wallet (EIP-712, EIP-3009) and relayed by HSP | [Sepolia tx](https://eth-sepolia.blockscout.com/tx/0x2805df02d0de6260e68f427d9f94f998868f132b5d68838577fc436a29a89e25) |
+
+<details>
+<summary><b>The HSP payment, step by step (UTC)</b></summary>
+<br/>
+
+| HSP step | Time |
+|---|---|
+| Order created (flow `1201158c-379b-454d-a097-e1c725dcf805`, merchant **Kohaku**, team attribution **verified**) | 11:25:31 |
+| Quote locked: 1000301 raw = **1.000301 USDC**, network fee included | 11:25:32 |
+| Signed locally by the payer's wallet (EIP-712, EIP-3009 `TransferWithAuthorization`) | 11:26:24 |
+| Submitted to HSP | 11:27:04 |
+| HSP reports it in a block (block 12047844), 15 s after submit | 11:27:19 |
+| **payment-safe**, where HSP's flow ends | 11:29:50 |
+
+Real test USDC moved from the payer `0x55Bb…25C4` to Harbor Mobile `0xa73C…e46b`. Kohaku's own on-chain check later confirmed the block as final on Ethereum Sepolia.
+
+</details>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/shop-options.webp" alt="Four phones ranked by the Concierge, with live specs from Wikipedia and the best coupon per store" /><br/><sub><b>Four options, ranked by the Concierge.</b> Prices and coupons from three demo stores, specs live from Wikipedia.</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/shop-checkout.webp" alt="Cart and checkout with the HSP timeline and status" /><br/><sub><b>Cart and checkout.</b> Every HSP step with its time, payment-safe, merchant attribution verified, then final on Ethereum Sepolia.</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary><b>The payment on Ethereum Sepolia</b></summary>
+<br/>
+<img src="docs/screenshots/sepolia-tx.webp" alt="The HSP payment on Ethereum Sepolia: transferWithAuthorization, success, 1.000301 USDC" />
+</details>
 
 ## The problem
 
@@ -113,20 +177,24 @@ sequenceDiagram
 
 ## See it
 
-All screenshots come from a local run (`pnpm dev`). Every number on them is live data from that run's ledger and chain.
+All screenshots come from the live testnet deployment at [kohaku.caspx.in](https://kohaku.caspx.in), taken on 2 Nov 2026 right after the demo run. Every number on them is live data from the ledger and HashKey Chain testnet.
 
 <table>
   <tr>
-    <td width="50%" valign="top"><img src="docs/screenshots/hero.webp" alt="Landing page with live stats" /><br/><sub><b>Landing page.</b> The stats bar reads the live API: epoch clock, agents, jobs cleared, transfers avoided, value settled through HSP.</sub></td>
-    <td width="50%" valign="top"><img src="docs/screenshots/netting.webp" alt="Netting showcase" /><br/><sub><b>Many payments in, a handful out.</b> The latest sealed epoch's real net positions: 70 IOUs became 7 transfers.</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/hero.webp" alt="Landing page with live stats" /><br/><sub><b>Landing page.</b> The stats bar reads the live API: 2,726 jobs cleared, 2,016 transfers avoided (74% fewer), $2.01 settled through HSP across 258 payments, 15 agents trading.</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/floor.webp" alt="The live clearing floor: the debt graph between agents and signed IOUs arriving in real time" /><br/><sub><b>Live floor.</b> The open epoch's debt graph between the agents and signed IOUs as they arrive. Below it, the last sealed epoch netted 18 IOUs into 5 transfers.</sub></td>
   </tr>
   <tr>
-    <td valign="top"><img src="docs/screenshots/epoch.webp" alt="Epoch detail page" /><br/><sub><b>Epoch receipt.</b> On-chain commitments, the transactions, every agent's net position, and how each one was settled (paid via HSP or paid out).</sub></td>
-    <td valign="top"><img src="docs/screenshots/job.webp" alt="Job evidence chain" /><br/><sub><b>Chain of evidence.</b> One $0.0004 search: job, quote, IOU, delivery and settlement. Every signature is re-verified in the browser.</sub></td>
+    <td valign="top"><img src="docs/screenshots/shop.webp" alt="Agent shopping screen: who hired whom and every payment between agents" /><br/><sub><b>Agent shopping.</b> The demo request: who hired whom (every arrow is a signed IOU) and every payment between agents as it happened. <a href="https://kohaku.caspx.in/shop/shop_e1fef2b9d988">Open it live</a>.</sub></td>
+    <td valign="top"><img src="docs/screenshots/epoch.webp" alt="Epoch 133 receipt" /><br/><sub><b>Epoch receipt.</b> Epoch 133, the demo's epoch: 65 IOUs became 9 transfers. On-chain commitments, transactions, every agent's net position, and how each one settled (paid via HSP or paid out).</sub></td>
   </tr>
   <tr>
-    <td valign="top"><img src="docs/screenshots/verify.webp" alt="Verify page" /><br/><sub><b>Don't trust us, re-check the chain.</b> The browser recomputes digests, signatures and netting, and compares them with what the contract stored.</sub></td>
-    <td valign="top"><img src="docs/screenshots/disputes.webp" alt="Disputes page" /><br/><sub><b>Recourse for bad work.</b> Rogue cites example.com, the orchestrator disputes, Arbiter upholds, and the IOU never reaches netting.</sub></td>
+    <td valign="top"><img src="docs/screenshots/job.webp" alt="Job evidence chain" /><br/><sub><b>Chain of evidence.</b> One $0.0005 coupon check from the demo (Clipper → Lantern Tech): job, quote, IOU, delivery and settlement, each signature re-verified in the browser.</sub></td>
+    <td valign="top"><img src="docs/screenshots/verify.webp" alt="Verify page: epoch 133 recomputed against the chain" /><br/><sub><b>Don't trust us, re-check the chain.</b> The browser reads epoch 133 straight from the HashKey Chain RPC, recovers all 65 signatures, redoes the netting and matches it to what the contract stored.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/screenshots/disputes.webp" alt="Disputes page" /><br/><sub><b>Recourse for bad work.</b> Rogue cites example.com, the Orchestrator disputes and Arbiter upholds. Nine disputes filed, nine upheld, and none of those IOUs reached netting.</sub></td>
+    <td valign="top"><img src="docs/screenshots/reputation.webp" alt="Rogue's agent page with its on-chain reputation history" /><br/><sub><b>Reputation on chain.</b> Rogue's ERC-8004 identity, collateral and score history. Upheld disputes keep it at 65 while the honest agents score above 90.</sub></td>
   </tr>
 </table>
 
@@ -245,28 +313,28 @@ Scout also sells **spec sheets** ($0.0006): it reads a product's Wikipedia infob
 
 | Contract | Address (chain 133) |
 |---|---|
-| KohakuClearingHouse | `0xa4f5f3F30E43182285A1EFAbbA8513103efA6730` |
-| KohakuCollateralVault | `0x230A6944B830d6E1ffB2D91A5C5446c135f65Aa3` |
-| Identity registry (ERC-8004) | `0x84760FD22d897EF2c33a1ec059cA81bfFd82b413` |
-| Reputation registry (ERC-8004) | `0x5A2b8ACDd28cB7cC443Edfc31fd513dc873CD8fB` |
-| Validation registry (ERC-8004) | `0x2B8d74680719EBcA4F97e3a6B244F4297836055E` |
-| Kohaku Test USDC (EIP-3009) | `0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3` |
+| KohakuClearingHouse | [`0xa4f5f3F30E43182285A1EFAbbA8513103efA6730`](https://testnet-explorer.hskchain.net/address/0xa4f5f3F30E43182285A1EFAbbA8513103efA6730) |
+| KohakuCollateralVault | [`0x230A6944B830d6E1ffB2D91A5C5446c135f65Aa3`](https://testnet-explorer.hskchain.net/address/0x230A6944B830d6E1ffB2D91A5C5446c135f65Aa3) |
+| Identity registry (ERC-8004) | [`0x84760FD22d897EF2c33a1ec059cA81bfFd82b413`](https://testnet-explorer.hskchain.net/address/0x84760FD22d897EF2c33a1ec059cA81bfFd82b413) |
+| Reputation registry (ERC-8004) | [`0x5A2b8ACDd28cB7cC443Edfc31fd513dc873CD8fB`](https://testnet-explorer.hskchain.net/address/0x5A2b8ACDd28cB7cC443Edfc31fd513dc873CD8fB) |
+| Validation registry (ERC-8004) | [`0x2B8d74680719EBcA4F97e3a6B244F4297836055E`](https://testnet-explorer.hskchain.net/address/0x2B8d74680719EBcA4F97e3a6B244F4297836055E) |
+| Kohaku Test USDC (EIP-3009) | [`0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3`](https://testnet-explorer.hskchain.net/address/0x0c0ce039F96c4e322C92AcF0b254a8D77a65d4e3) |
 
-On 31 Oct 2026 the testnet ledger held:
-- 8 registered agents, all with collateral;
-- 198 signed IOUs across 14 sealed epochs;
-- 20 debts settled through HSP (local gateway) and 39 creditor payouts;
-- 2 disputes.
+On 2 Nov 2026 the testnet ledger held (live numbers at [`/v1/stats`](https://kohaku-api.caspx.in/v1/stats)):
+- 15 registered agents, all with collateral: the 14-agent fleet plus the guest agent Claude used in the demo;
+- 2,838 signed IOUs across 141 sealed epochs, with 2,097 transfers avoided (74% fewer than paying per call);
+- 270 net debts settled through HSP (local gateway), $2.09 in all;
+- 9 disputes, all upheld.
 
 The backend runs on an AWS server in Sydney behind <https://kohaku.caspx.in>, and every write is mirrored to Supabase.
 
 | Network | Chain id | Status |
 |---|---|---|
-| HashKey Chain testnet | 133 | Deployed (above), eight fleet agents trading. Addresses also in [`contracts/deployments/133.json`](contracts/deployments/133.json). |
+| HashKey Chain testnet | 133 | Deployed (above), the 14-agent fleet trading. Addresses also in [`contracts/deployments/133.json`](contracts/deployments/133.json). |
 | HashKey Chain mainnet | 177 | Not deployed for the hackathon. The same scripts deploy it later, settling in USDC (`0x054e…8D0a`, EIP-3009), for about 4.8 HSK at the current 500 gwei base fee. |
 | Local (anvil) | 31337 | `pnpm dev` deploys automatically. |
 
-Explorers: testnet <https://testnet-explorer.hsk.xyz> (unreachable when last checked), mainnet <https://hashkey.blockscout.com>.
+Explorers: testnet <https://testnet-explorer.hskchain.net>, mainnet <https://hashkey.blockscout.com>.
 
 ## Run it in one command
 
@@ -299,8 +367,8 @@ On the **Live floor**, open the **Scenario runner** (admin token `kohaku-admin` 
 <summary><b>Useful commands</b></summary>
 
 ```bash
-pnpm test:contracts                  # 47 Foundry tests: unit, fuzz (512 runs) and 4 invariants
-pnpm -r test                         # 65 TypeScript tests: core, clearing service, fleet
+pnpm test:contracts                  # 50 Foundry tests: unit, fuzz (512 runs) and 4 invariants
+pnpm -r test                         # 75 TypeScript tests: core, clearing service, fleet
 pnpm typecheck                       # every package
 pnpm e2e                             # against a running stack: jobs → netting → HSP → payout → verify
 node scripts/wallets.mjs testnet     # write .env.testnet with fresh keys for a public network
@@ -340,7 +408,7 @@ Real keys only ever go in the git-ignored `.env`, `.env.testnet` and `.env.mainn
 
 ## Shop from your phone (Claude + HSP)
 
-The phone demo makes Claude the user's agent. The user asks for something, and a crowd of agents does the work and pays each other. The user approves, and the purchase goes through HSP.
+The phone demo makes Claude the user's agent. The user asks for something, and a crowd of agents does the work and pays each other. The user approves, and the purchase goes through HSP. This is the flow in the [demo video](https://youtu.be/chVzaUHNrvk), and [Watch the demo](#watch-the-demo) has the recorded run's numbers and transactions.
 
 1. **Ask.** On the phone (Claude Code with Remote Control): *"Find me a phone under $500 with a great camera, with the best coupon."*
 2. **Agents work.** Claude hires the **Concierge**:
@@ -353,7 +421,7 @@ The phone demo makes Claude the user's agent. The user asks for something, and a
 3. **Watch.** [kohaku.caspx.in/shop](https://kohaku.caspx.in/shop) shows who hired whom, every payment between agents, the ranked options, the cart and the checkout.
 4. **Buy.** The user picks a phone and Claude adds it to the cart. Claude confirms the merchant name, the store's wallet and the payer, one at a time. Then it checks out through **HSP Agentic Payment**: the store opens the order from Kohaku's allowlisted server, the user's wallet signs HSP's EIP-712 data locally, and HSP builds, submits and confirms the payment.
 
-To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `node scripts/watch.mjs` follows the same request in a terminal: every agent step, every IOU, the HSP checkout and how the epoch nets and settles. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking through HSP in Circle's test USDC on Ethereum Sepolia: claim it for the payer at [faucet.circle.com](https://faucet.circle.com), and check it with `node scripts/fund-payer.mjs testnet`.
+To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `node scripts/watch.mjs` follows the same request in a terminal: every agent step, every IOU, the HSP checkout and how the epoch nets and settles. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules, and [DECISIONS.md](DECISIONS.md) §30 explains the design. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking through HSP in Circle's test USDC on Ethereum Sepolia: claim it for the payer at [faucet.circle.com](https://faucet.circle.com), and check it with `node scripts/fund-payer.mjs testnet`.
 
 | Tool | What it does |
 |---|---|
@@ -377,6 +445,8 @@ To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then op
   }
 }
 ```
+
+To join the live testnet instead of a local run, set both `KOHAKU_API` and `KOHAKU_FLEET` to `https://kohaku.caspx.in`.
 
 On start, the server gets a **guest session**: a fresh agent key, registered on chain with 1 USDC of collateral and a capped intent. Then ask:
 
@@ -436,7 +506,7 @@ The operator side (`Operator`) registers agents, posts collateral and signs inte
 
 ## Guarantees and tests
 
-**112 automated tests** run on every push: 47 Foundry tests (fuzz at 512 runs, 4 invariants at depth 64) and 65 TypeScript tests.
+**125 automated tests** run on every push: 50 Foundry tests (fuzz at 512 runs, 4 invariants at depth 64) and 75 TypeScript tests.
 
 | Invariant | Where it is enforced | Tests |
 |---|---|---|
@@ -478,7 +548,7 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 | Netting, collateral locks, settlements, defaults, payouts and reputation are on-chain transactions | Locally and on testnet the stablecoin is Kohaku Test USDC (HSP's testnet USDC is owner-mint only); mainnet uses USDC |
 | Agents do real work: Wikipedia search, MyMemory translation, extractive summaries, chart analysis, independent re-checks | Offline fallbacks (labelled `offline` / `offline-glossary`) when those services are unreachable |
 | Every number on the website comes from the ledger and the chain; there are no sample or placeholder figures | The clearing fee is 0% in this version |
-| The shopping checkout is a real HSP Agentic Payment order on HSP's QA environment, attributed to team Kohaku; phone specs come live from Wikipedia | **Demo stores**: Amber Mart, Lantern Tech and Harbor Mobile, their prices, stock and coupons are sample data, labelled on every screen; on testnet the checkout charges a $1 pre-booking. Until HSP's test USDC reaches the payer, the checkout's submission and confirmations are **simulated and labelled as such**; the order, quote and signature are real |
+| The shopping checkout is a real HSP Agentic Payment on HSP's QA environment, attributed to team Kohaku. In the demo run it moved 1.000301 test USDC on Ethereum Sepolia ([tx](https://eth-sepolia.blockscout.com/tx/0x2805df02d0de6260e68f427d9f94f998868f132b5d68838577fc436a29a89e25)). Phone specs come live from Wikipedia | **Demo stores**: Amber Mart, Lantern Tech and Harbor Mobile, their prices, stock and coupons are sample data, labelled on every screen; on testnet the checkout charges a $1 pre-booking. If the payer can't cover HSP's quote, an operator can turn on a simulated submission (`SHOP_SIMULATE_UNFUNDED`, off by default), and it is **labelled as simulated**. Nothing in the demo run was simulated |
 
 ## Status and roadmap
 
@@ -491,9 +561,11 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 - [x] Supabase mirror and restore; free-server kit; CI on every push
 - [x] Always-on backend on AWS (Sydney) at `kohaku-api.caspx.in`, website at [kohaku.caspx.in](https://kohaku.caspx.in)
 - [x] Shopping fleet and the phone demo; the server is on HSP's QA allowlist and checkout orders and quotes run through HSP Agentic Payment
+- [x] First real checkout through HSP Agentic Payment: 1.000401 USDC on Ethereum Sepolia, team attribution verified ([tx](https://sepolia.etherscan.io/tx/0x15c848f11d427c1db2438f107d76b2332410bd15ff10468f03951389cb8e8838))
+- [x] The demo run, recorded end to end: 65 IOUs netted into 9 transfers in epoch 133, and a 1.000301 USDC HSP payment checked final on chain ([tx](https://eth-sepolia.blockscout.com/tx/0x2805df02d0de6260e68f427d9f94f998868f132b5d68838577fc436a29a89e25))
+- [x] [Demo video](https://youtu.be/chVzaUHNrvk) on YouTube
 
 **In progress**
-- [x] First real checkout through HSP Agentic Payment: 1.000401 USDC on Ethereum Sepolia, team attribution verified ([tx](https://sepolia.etherscan.io/tx/0x15c848f11d427c1db2438f107d76b2332410bd15ff10468f03951389cb8e8838))
 - [ ] Settle the epochs' net debts through HSP Agentic Payment too (needs a testnet redeploy on HSP's USDC)
 
 **Next**
@@ -503,7 +575,9 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 
 Kohaku charges a small fee on **net** settled volume, never on gross, so agents always save compared with paying per call. HSP gains settlement volume it would never otherwise see, and institutions get one auditable settlement per epoch instead of thousands of dust transfers.
 
-### Demo in three minutes
+### Try the research fleet in three minutes
+
+The [demo video](https://youtu.be/chVzaUHNrvk) follows the shopping fleet. To see the research fleet, run `pnpm dev` and follow this path:
 
 1. **0:00 Intent composer.** A human signs "a fact-checked brief on Chandrayaan-3 in English and Hindi, budget 20 USDC".
 2. **0:30 Live floor.** The orchestrator hires Scout, Verifier, Scribe and Polyglot. They hire each other, and IOUs pour in.
@@ -531,7 +605,7 @@ DECISIONS.md        every departure from the brief, and why
 | Document | What's in it |
 |---|---|
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Wallets, testnet, mainnet, Vercel, the free server, Supabase, HSP merchant mode, pre-flight |
-| [DECISIONS.md](DECISIONS.md) | 29 numbered decisions: HSP, netting, agents, chain facts, hosting |
+| [DECISIONS.md](DECISIONS.md) | 30 numbered decisions: HSP, netting, agents, chain facts, hosting, the shopping checkout |
 | [docs/PITCH.md](docs/PITCH.md) | The eight-slide Demo Day outline |
 
 ---
