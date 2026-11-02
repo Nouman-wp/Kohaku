@@ -395,4 +395,13 @@ why. Newest decisions are at the bottom of each section.
   price, because HSP's test USDC is scarce and owner-minted.
 - **Guests:** guest intents now last 7 days and are renewed for the same agent. The payer wallet,
   and any test tokens sent to it, then survive across sessions.
+- **Update (2 Nov):**
+  - HSP's test USDC is handed out by hand and has not reached us. The faucet tokens HashKey sent
+    (`0x7388…` and `0xD50e…`) are plain mock ERC-20s that HSP's chain config does not list. So, with
+    `SHOP_SIMULATE_UNFUNDED=1` and only while the payer cannot cover the quote, the store simulates
+    the submission and confirmations.
+  - The order, the locked quote, the wallet signature and finalize are still real calls to HSP.
+  - Every simulated status is labelled on the screen, in the terminal view and in Claude's replies,
+    and no transaction hash is invented. A funded payer goes through the real gateway with the
+    setting on.
 

@@ -47,6 +47,8 @@ export interface FleetConfig {
   merchantName: string;
   shopToken: string;
   shopDepositUsd: string;
+  /** simulate (and label) the HSP submission when the payer cannot fund the quote */
+  shopSimulateUnfunded: boolean;
 }
 
 export function loadFleetConfig(): FleetConfig {
@@ -83,6 +85,7 @@ export function loadFleetConfig(): FleetConfig {
     merchantName: e.HSP_MERCHANT_NAME ?? "Kohaku",
     shopToken: e.SHOP_TOKEN ?? "USDC",
     shopDepositUsd: Number(e.SHOP_DEPOSIT_USD ?? 1).toFixed(2),
+    shopSimulateUnfunded: ["1", "on", "true"].includes(String(e.SHOP_SIMULATE_UNFUNDED ?? "").toLowerCase()),
   };
 }
 

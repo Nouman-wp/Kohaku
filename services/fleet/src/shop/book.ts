@@ -95,6 +95,10 @@ export interface Checkout {
   txHash: string | null;
   attributionVerified: boolean | null;
   statusReason: string | null;
+  /** the server may simulate submission when the payer cannot fund the quote (SHOP_SIMULATE_UNFUNDED) */
+  simulationAllowed: boolean;
+  /** true once the submission and confirmations are simulated: nothing reached HSP's gateway */
+  simulated: boolean;
   history: { at: number; status: string; note: string }[];
 }
 
@@ -147,7 +151,14 @@ export class ShopBook {
   constructor(
     private readonly file: string,
     private readonly hsp: HspAgentic,
-    private readonly opts: { chainId: number; tokenSymbol: string; depositUsd: string; log: (m: string) => void },
+    private readonly opts: {
+      chainId: number;
+      tokenSymbol: string;
+      depositUsd: string;
+      log: (m: string) => void;
+      simulateUnfunded: boolean;
+      balanceOf: (token: string, who: string) => Promise<bigint>;
+    },
   ) {
     if (existsSync(file)) {
       try {
@@ -163,7 +174,8 @@ export class ShopBook {
         s.status = "failed";
         s.error = "interrupted by a restart";
       }
-      if (s.checkout && this.isPending(s.checkout.status)) this.poll(s.id);
+      if (s.checkout?.simulated && this.isPending(s.checkout.status)) this.finishSimulation(s.id);
+      else if (s.checkout && this.isPending(s.checkout.status)) this.poll(s.id);
     }
   }
 
@@ -336,6 +348,8 @@ export class ShopBook {
         txHash: null,
         attributionVerified: null,
         statusReason: null,
+        simulationAllowed: this.opts.simulateUnfunded,
+        simulated: false,
         history: [{ at: Date.now(), status: "order-created", note: `HSP order ${order.flow_id} for $${amount} to ${s.cart.storeName}` }],
       };
       s.checkout = c;
@@ -376,14 +390,22 @@ export class ShopBook {
       signature,
     });
     if (!isAddressEqual(signer, c.payer as Hex)) throw new CheckoutError(`signature is from ${signer}, not the confirmed payer ${c.payer}`);
-    const out = await this.hsp.finalizePayment({
-      signature,
-      payment_payload: p.payment_payload,
-      payment_mandate_contents: p.payment_mandate_contents,
-      cart_hash: p.cart_hash,
-    });
-    if (!out.payment_mandate_json) throw new CheckoutError("HSP returned no payment mandate", 502);
-    this.secret.set(id, { prepared: p, paymentMandateJson: typeof out.payment_mandate_json === "string" ? out.payment_mandate_json : JSON.stringify(out.payment_mandate_json) });
+    let mandate: string;
+    try {
+      const out = await this.hsp.finalizePayment({
+        signature,
+        payment_payload: p.payment_payload,
+        payment_mandate_contents: p.payment_mandate_contents,
+        cart_hash: p.cart_hash,
+      });
+      if (!out.payment_mandate_json) throw new CheckoutError("HSP returned no payment mandate", 502);
+      mandate = typeof out.payment_mandate_json === "string" ? out.payment_mandate_json : JSON.stringify(out.payment_mandate_json);
+    } catch (err) {
+      if (!(await this.simulating(c))) throw err;
+      mandate = "simulated";
+      c.history.push({ at: Date.now(), status: "note", note: `HSP finalize_payment refused (${(err as Error).message.slice(0, 120)}); continuing as a simulation` });
+    }
+    this.secret.set(id, { prepared: p, paymentMandateJson: mandate });
     c.status = "signed";
     c.history.push({ at: Date.now(), status: "signed", note: `signed by ${c.payer}` });
     this.step(s.id, "HSP", "payment mandate built from the payer's signature; waiting for approval to submit");
@@ -397,6 +419,11 @@ export class ShopBook {
     const json = this.secret.get(id)?.paymentMandateJson;
     if (!s || !c || !json) throw new CheckoutError("nothing to submit; approve the payment first");
     if (c.status !== "signed") throw new CheckoutError(`the payment is ${c.status}`);
+    if (json === "simulated" || (await this.simulating(c))) {
+      this.simulate(id);
+      this.touch(s);
+      return c;
+    }
     try {
       const r = await this.hsp.submitPayment(json);
       const status = (findString(r, "status") as CheckoutStatus | null) ?? "payment-submitted";
@@ -418,6 +445,51 @@ export class ShopBook {
     }
     this.touch(s);
     return c;
+  }
+
+  /** Simulation only when it is allowed and the payer really cannot cover HSP's quote. */
+  private async simulating(c: Checkout): Promise<boolean> {
+    if (!this.opts.simulateUnfunded || !c.tokenTotalRaw) return false;
+    const bal = await this.opts.balanceOf(c.token.address, c.payer).catch(() => 0n);
+    return bal < BigInt(c.tokenTotalRaw);
+  }
+
+  /**
+   * A labelled stand-in for HSP's gateway while the payer holds no HSP test USDC: the order,
+   * quote and signature above are real; the submission and confirmations are not, and every
+   * status says so. No transaction hash is invented.
+   */
+  private simulate(id: string): void {
+    const s = this.get(id);
+    const c = s?.checkout;
+    if (!s || !c) return;
+    c.simulated = true;
+    c.txHash = null;
+    c.statusReason = "Simulated: the payer holds no HSP test USDC yet, so nothing was submitted to HSP's gateway and no transaction exists.";
+    const steps: [number, CheckoutStatus][] = [
+      [0, "payment-submitted"],
+      [2_500, "payment-verified"],
+      [5_000, "payment-processing"],
+      [9_000, "payment-included"],
+      [14_000, "payment-safe"],
+      [20_000, "payment-finalized"],
+    ];
+    for (const [delay, status] of steps) {
+      setTimeout(() => {
+        const cur = this.get(id)?.checkout;
+        if (!cur || !cur.simulated) return;
+        cur.status = status;
+        cur.history.push({ at: Date.now(), status, note: "simulated" });
+        this.step(id, "HSP (simulated)", `payment ${status}`);
+      }, delay);
+    }
+  }
+
+  private finishSimulation(id: string): void {
+    const c = this.get(id)?.checkout;
+    if (!c) return;
+    c.status = "payment-finalized";
+    c.history.push({ at: Date.now(), status: "payment-finalized", note: "simulated (completed after a restart)" });
   }
 
   /** query_payment every 15 s until safe, finalized or failed (HSP's guide). */

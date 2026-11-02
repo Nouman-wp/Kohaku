@@ -74,6 +74,7 @@ interface Checkout {
   txHash: string | null;
   attributionVerified: boolean | null;
   statusReason: string | null;
+  simulated?: boolean;
   history: { at: number; status: string; note: string }[];
 }
 interface Session {
@@ -180,7 +181,11 @@ export default function Shop() {
             value={epoch ? (epoch.phase === "intake" ? clock(Math.max(0, epoch.intakeEndsAt - now)) : epoch.phase) : cur ? `#${cur}` : "—"}
             label={epoch ? `epoch ${epoch.id} ${epoch.phase === "intake" ? "nets in" : ""}`.trim() : "current epoch"}
           />
-          <Counter value={s.checkout ? label(s.checkout.status) : s.cart ? "in cart" : "—"} label="checkout (HSP)" accent={!!s.checkout} />
+          <Counter
+            value={s.checkout ? label(s.checkout.status) : s.cart ? "in cart" : "—"}
+            label={s.checkout?.simulated ? "checkout (HSP, simulated)" : "checkout (HSP)"}
+            accent={!!s.checkout}
+          />
         </div>
 
         <div className="shop-grid">
@@ -506,7 +511,10 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
           return (
             <li key={st.key} className={t ? "done" : next ? (failed ? "failed" : "next") : ""}>
               <span className="shop-tl-dot" aria-hidden />
-              <span>{st.label}</span>
+              <span>
+                {st.label}
+                {c?.simulated && i >= 4 && t ? <span className="shop-sim"> simulated</span> : null}
+              </span>
               <time className="muted">{t ? new Date(t).toLocaleTimeString() : next && !failed ? "…" : ""}</time>
             </li>
           );
@@ -518,6 +526,7 @@ function CartView({ session, explorer, now }: { session: Session; explorer: stri
           <dt>Status</dt>
           <dd>
             <Pill tone={c.status === "payment-finalized" || c.status === "payment-safe" ? "good" : failed ? "warn" : "accent"}>{c.status}</Pill>
+            {c.simulated && <span className="shop-sim-badge">Simulated</span>}
           </dd>
           <dt>Merchant</dt>
           <dd>

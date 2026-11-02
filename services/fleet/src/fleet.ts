@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { REPO_ROOT } from "./config.ts";
 import { isAddress, type Address } from "viem";
 import type { AgentSummary as Summary } from "@kohaku/core";
+import { erc20Abi } from "@kohaku/core/abis";
 
 type Slug =
   | "orchestrator"
@@ -209,6 +210,9 @@ export class Fleet {
       tokenSymbol: this.cfg.shopToken,
       depositUsd: this.cfg.shopDepositUsd,
       log: (m) => this.log("shop", m),
+      simulateUnfunded: this.cfg.shopSimulateUnfunded,
+      balanceOf: async (token, who) =>
+        (await this.operator.publicClient.readContract({ address: token as Address, abi: erc20Abi, functionName: "balanceOf", args: [who as Address] })) as bigint,
     });
 
     // 1. agents with keys and cards, served before registration so the cards resolve

@@ -1,6 +1,7 @@
 // Shopping smoke test: spawn the MCP server over stdio like Claude would, research a phone
 // with the Concierge, add the top option to the cart and (with SHOP_CHECKOUT=1, on a server
-// HSP allowlists) open the HSP Agentic Payment checkout.
+// HSP allowlists) open the HSP Agentic Payment checkout; with SHOP_PAY=1 also sign, submit
+// and read the payment status.
 // Run with the stack up: pnpm --filter @kohaku/mcp shop
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -35,6 +36,12 @@ if (session) {
     const balance = await call("check_balance", {});
     const payer = (balance.structuredContent as { wallet?: string } | undefined)?.wallet;
     if (c && payer) await call("checkout", { session, merchantName: c.merchantName, payTo: c.payTo, payer });
+    if (process.env.SHOP_PAY === "1") {
+      await call("approve_payment", { session });
+      await call("submit_payment", { session });
+      await new Promise((r) => setTimeout(r, 25_000));
+      await call("payment_status", { session });
+    }
   }
 }
 await client.close();

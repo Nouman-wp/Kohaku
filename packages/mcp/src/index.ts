@@ -298,6 +298,8 @@ async function main() {
     txHash: string | null;
     attributionVerified: boolean | null;
     statusReason: string | null;
+    simulationAllowed?: boolean;
+    simulated?: boolean;
   }
   const pending = new Map<string, { eip712: { domain: Record<string, unknown>; types: Record<string, { name: string; type: string }[]>; primaryType: string; message: Record<string, unknown> }; checkout: CheckoutView }>();
   const review = (c: CheckoutView) =>
@@ -439,7 +441,8 @@ async function main() {
       const c = p.checkout;
       if (c.quoteExpiresAt && Date.parse(c.quoteExpiresAt) < Date.now()) throw new Error("the 5-minute HSP quote expired; call checkout again for a fresh quote");
       const balance = (await agent.publicClient.readContract({ address: c.token.address as Hex, abi: erc20Abi, functionName: "balanceOf", args: [agent.address] })) as bigint;
-      if (c.tokenTotalRaw && balance < BigInt(c.tokenTotalRaw)) {
+      const short = !!c.tokenTotalRaw && balance < BigInt(c.tokenTotalRaw);
+      if (short && !c.simulationAllowed) {
         return text(
           `Not signing: ${agent.address} holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol} (${c.token.address}) but the payment needs ${raw(c.tokenTotalRaw, c.token.decimals)}. The team has to fund this wallet with HSP's ${c.token.symbol} by hand, then call checkout again for a fresh quote.`,
         );
@@ -449,8 +452,11 @@ async function main() {
       const signature = await agent.account.signTypedData!({ domain: p.eip712.domain, types, primaryType: p.eip712.primaryType, message: p.eip712.message } as never);
       const r = await fleetCall<{ checkout: CheckoutView }>(`/shop/sessions/${id}/checkout/finalize`, { signature });
       pending.delete(id);
+      const simNote = short
+        ? `SIMULATION: this wallet holds ${raw(balance.toString(), c.token.decimals)} ${c.token.symbol}, less than the quote, so the store will simulate the submission and confirmations. Tell the user plainly that the payment step is simulated and no funds move.`
+        : null;
       return text(
-        ["Signed locally and HSP built the payment mandate. Show the user these again and wait for explicit approval before calling submit_payment:", review(r.checkout), `Live screen: ${screen(id)}`].join("\n"),
+        [simNote, "Signed locally and HSP built the payment mandate. Show the user these again and wait for explicit approval before calling submit_payment:", review(r.checkout), `Live screen: ${screen(id)}`].filter(Boolean).join("\n"),
         r.checkout as unknown as Record<string, unknown>,
       );
     },
@@ -466,7 +472,13 @@ async function main() {
     async ({ session: id }) => {
       const r = await fleetCall<{ checkout: CheckoutView }>(`/shop/sessions/${id}/checkout/submit`, {});
       return text(
-        [`HSP status: ${r.checkout.status}. This is not final confirmation yet; the server polls HSP every 15 s and the live screen updates.`, review(r.checkout), `Live screen: ${screen(id)}`].join("\n"),
+        [
+          r.checkout.simulated
+            ? `SIMULATED HSP payment: ${r.checkout.status}. Nothing was submitted to HSP's gateway (the payer holds no HSP test USDC); the confirmations on the live screen are simulated and labelled.`
+            : `HSP status: ${r.checkout.status}. This is not final confirmation yet; the server polls HSP every 15 s and the live screen updates.`,
+          review(r.checkout),
+          `Live screen: ${screen(id)}`,
+        ].join("\n"),
         r.checkout as unknown as Record<string, unknown>,
       );
     },
@@ -486,8 +498,8 @@ async function main() {
       const explorer = cfg.chain.id === 133 ? "https://testnet-explorer.hskchain.net" : "https://hashkey.blockscout.com";
       return text(
         [
-          "HSP Agentic Payment — QA result",
-          `Payment status: ${c.status}`,
+          c.simulated ? "HSP Agentic Payment — SIMULATED (no transaction was submitted)" : "HSP Agentic Payment — QA result",
+          `Payment status: ${c.status}${c.simulated ? " (simulated)" : ""}`,
           `Hackathon team: ${c.merchantName}`,
           `Team attribution verified: ${c.attributionVerified ?? "unavailable"}`,
           `Network: ${c.network.name}`,

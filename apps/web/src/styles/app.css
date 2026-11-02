@@ -1654,3 +1654,20 @@ a.list-row:hover {
 .shop-waiting {
   padding: 40px 0 80px;
 }
+
+.shop-sim {
+  margin-left: 6px;
+  font: 500 11px var(--font-mono);
+  color: var(--amber);
+}
+.shop-sim-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--amber-line);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font: 600 11px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

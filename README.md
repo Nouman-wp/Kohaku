@@ -327,6 +327,7 @@ Copy `.env.example` to `.env`. Every setting is documented there. The ones you a
 | `HSP_AGENTIC_URL` | HSP QA | HSP Agentic Payment, used by the demo stores' checkout (needs an allowlisted IP) |
 | `HSP_MERCHANT_NAME` | `Kohaku` | The team name HSP attributes payments to |
 | `SHOP_DEPOSIT_USD` | `1` | The pre-booking amount the demo checkout charges through HSP |
+| `SHOP_SIMULATE_UNFUNDED` | off | Simulate (and label) the HSP submission when the payer holds no HSP test USDC |
 | `PUBLIC_WEB_URL` | | The website, for links to the live shopping screen |
 | `GUEST_SESSIONS_PER_HOUR` | `20` | Guest agents for MCP clients (`0` on mainnet) |
 | `ADMIN_TOKEN` | | Protects the scenario runner and admin routes |
@@ -350,7 +351,7 @@ The phone demo makes Claude the user's agent. The user asks for something, and a
 3. **Watch.** [kohaku.caspx.in/shop](https://kohaku.caspx.in/shop) shows who hired whom, every payment between agents, the ranked options, the cart and the checkout.
 4. **Buy.** The user picks a phone and Claude adds it to the cart. Claude confirms the merchant name, the store's wallet and the payer, one at a time. Then it checks out through **HSP Agentic Payment**: the store opens the order from Kohaku's allowlisted server, the user's wallet signs HSP's EIP-712 data locally, and HSP builds, submits and confirms the payment.
 
-To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking in HSP's test USDC; fund the payer with `node scripts/fund-payer.mjs testnet 20`.
+To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then open the session in the Claude app. `node scripts/watch.mjs` follows the same request in a terminal: every agent step, every IOU, the HSP checkout and how the epoch nets and settles. `demo/phone/CLAUDE.md` holds the flow and HSP's confirmation rules. The stores, prices and coupons are a demo catalogue. On testnet the checkout takes a $1 pre-booking in HSP's test USDC; fund the payer with `node scripts/fund-payer.mjs testnet 20`.
 
 | Tool | What it does |
 |---|---|
@@ -475,7 +476,7 @@ The full runbook is [docs/DEPLOY.md](docs/DEPLOY.md):
 | Netting, collateral locks, settlements, defaults, payouts and reputation are on-chain transactions | Locally and on testnet the stablecoin is Kohaku Test USDC (HSP's testnet USDC is owner-mint only); mainnet uses USDC |
 | Agents do real work: Wikipedia search, MyMemory translation, extractive summaries, chart analysis, independent re-checks | Offline fallbacks (labelled `offline` / `offline-glossary`) when those services are unreachable |
 | Every number on the website comes from the ledger and the chain; there are no sample or placeholder figures | The clearing fee is 0% in this version |
-| The shopping checkout is a real HSP Agentic Payment order on HSP's QA environment, attributed to team Kohaku; phone specs come live from Wikipedia | **Demo stores**: Amber Mart, Lantern Tech and Harbor Mobile, their prices, stock and coupons are sample data, labelled on every screen; on testnet the checkout charges a $1 pre-booking |
+| The shopping checkout is a real HSP Agentic Payment order on HSP's QA environment, attributed to team Kohaku; phone specs come live from Wikipedia | **Demo stores**: Amber Mart, Lantern Tech and Harbor Mobile, their prices, stock and coupons are sample data, labelled on every screen; on testnet the checkout charges a $1 pre-booking. Until HSP's test USDC reaches the payer, the checkout's submission and confirmations are **simulated and labelled as such**; the order, quote and signature are real |
 
 ## Status and roadmap
 

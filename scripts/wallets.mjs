@@ -85,6 +85,8 @@ HSP_GATEWAY_RELAYER_KEY=
 HSP_AGENTIC_URL=https://mcp-qa.hashkeymerchant.com/
 SHOP_TOKEN=USDC
 SHOP_DEPOSIT_USD=1
+# 1 = simulate (and label) the submission when the payer cannot cover HSP's quote
+SHOP_SIMULATE_UNFUNDED=
 
 # ── agent fleet ──────────────────────────────────────────────────────────────
 FLEET_PORT=${testnet ? "8788" : "8798"}
