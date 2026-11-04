@@ -56,6 +56,8 @@ export class Chain {
   readonly d: Deployment;
   private queue: Promise<unknown> = Promise.resolve();
   healthy = true;
+  /** when an RPC call last failed (0: never) */
+  rpcTroubleAt = 0;
   lastBlock = 0n;
   lastError: string | null = null;
 
@@ -66,9 +68,20 @@ export class Chain {
     this.viemChain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
     // HashKey Chain makes a block every ~2 s; polling faster only spends the public RPC's rate limit
     const pollingInterval = key === "local" ? 250 : 2_000;
-    this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000 }), pollingInterval }) as PublicClient;
+    // remember when the RPC last let us down (rate limit, server error, timeout, network)
+    const fetchFn = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      try {
+        const res = await fetch(input, init);
+        if (res.status === 429 || res.status >= 500) this.rpcTroubleAt = Date.now();
+        return res;
+      } catch (err) {
+        this.rpcTroubleAt = Date.now();
+        throw err;
+      }
+    };
+    this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000, fetchFn }), pollingInterval }) as PublicClient;
     this.account = privateKeyToAccount(clearerKey, { nonceManager });
-    this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000 }), account: this.account, pollingInterval });
+    this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000, fetchFn }), account: this.account, pollingInterval });
   }
 
   get explorer(): string | null {

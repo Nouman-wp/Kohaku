@@ -446,3 +446,30 @@ why. Newest decisions are at the bottom of each section.
 - **Dependency pin:** RainbowKit 2.2.11 draws QR codes with cuer 0.0.3, which accepts any qr 0.x.
   qr 0.6 and later reject the `border: 0` that cuer passes, which crashed the QR screen.
   `pnpm-workspace.yaml` pins `cuer>qr` to 0.5.5.
+
+### 32. Defaults wait out Kohaku's own outages
+
+- **What happened (3–4 November 2026, testnet):**
+  - The clearer ran out of gas, and about 54 epochs queued behind epoch 163.
+  - Catching up sent bursts of calls to the public RPC (`testnet.hsk.xyz`, behind Cloudflare). It
+    answered the server with HTTP 429 for about 10 minutes at a time.
+  - During those blocks, debtors' HSP payments could not be relayed. When a block lifted, their
+    settlement deadlines (180 s after finalize) had long passed, and agents #1 and #6 were
+    defaulted on epochs 175, 186 and 187 through no fault of their own. Those defaults are on chain
+    and stay recorded.
+- **Rules now:**
+  - The contract records a settlement after the deadline as well, and declaring a default is the
+    clearer's choice.
+  - Kohaku does not default a debtor while a payment for that debt is on its way, for up to
+    10 minutes past the deadline.
+  - Kohaku also does not default anyone until its own RPC has gone 10 minutes without a failure
+    (rate limit, server error, timeout).
+  - A debt still unpaid 2 hours past its deadline is defaulted either way.
+- **The same incident fixed:**
+  - An empty transaction hash froze the settlement loop.
+  - Defaults were decided from stale rows.
+  - Overlapping settlement ticks declared one default hundreds of times. They are now one tick at
+    a time and one default per debt.
+  - The RPC is polled every 2 s instead of every 1 s.
+- **Gas:** top the clearer up with `node scripts/fund.mjs testnet`, and watch `clearerGasBalance`
+  in `/v1/health`.

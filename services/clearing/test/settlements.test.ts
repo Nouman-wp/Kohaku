@@ -15,12 +15,13 @@ const TX = ("0x" + "ab".repeat(32)) as Hex;
 
 type Verify = (cart: string) => HspVerification | Promise<HspVerification>;
 
-function setup(verify: Verify, hold?: Promise<void>) {
+function setup(verify: Verify, hold?: Promise<void>, rpcTroubleAt = 0) {
   const db = new Db(mkdtempSync(join(tmpdir(), "kohaku-stl-")));
   const writes: string[] = [];
   const chain = {
     d: { clearingHouse: POOL, token: TOKEN },
     viemChain: { id: 133 },
+    rpcTroubleAt,
     publicClient: { getBlock: async () => ({ timestamp: BigInt(Math.floor(Date.now() / 1000)) }) },
     write: async (label: string) => {
       writes.push(label);
@@ -157,5 +158,22 @@ describe("settlement pipeline", () => {
     db.run("INSERT INTO positions(epoch, agent_id, credit, debit, net, state) VALUES (186, 1, 0, 15600, -15600, 'defaulted')");
     db.run("UPDATE epochs SET defaults = 455 WHERE id = 186");
     expect(new Db(dir).get<{ defaults: number }>("SELECT defaults FROM epochs WHERE id = 186")!.defaults).toBe(1);
+  });
+
+  it("does not default anyone while Kohaku itself cannot reach the chain", async () => {
+    const { db, s, writes } = setup(() => pending("payment-required"), undefined, Date.now() - 60_000);
+    debts(db, 187, 30 * 60_000, [{ agent: 6, status: "awaiting_payment" }]);
+    db.run("UPDATE settlements SET updated_at = ?", Date.now());
+    await s.tick();
+    expect(writes.some((w) => w.startsWith("declareDefault"))).toBe(false);
+    expect(row(db, "stl_187_6").status).toBe("awaiting_payment");
+  });
+
+  it("still defaults an unpaid debt two hours on, even if the RPC stays flaky", async () => {
+    const { db, s, writes } = setup(() => pending("payment-required"), undefined, Date.now() - 60_000);
+    debts(db, 150, 2 * 60 * 60_000 + 60_000, [{ agent: 6, status: "awaiting_payment" }]);
+    db.run("UPDATE settlements SET updated_at = ?", Date.now());
+    await s.tick();
+    expect(writes).toContain("declareDefault e150 #6");
   });
 });

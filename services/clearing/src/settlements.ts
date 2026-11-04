@@ -11,6 +11,10 @@ import { epochView, payoutView, settlementView, type EpochRow, type PayoutRow, t
 const DEFAULT_GRACE_MS = 3_000;
 /** how long past the deadline a payment HSP is still carrying holds off the default */
 const IN_FLIGHT_GRACE_MS = 10 * 60_000;
+/** how long the RPC must have worked without a failure before a debtor is defaulted */
+const RPC_STEADY_MS = 10 * 60_000;
+/** past this, a debt is defaulted even if the RPC is still flaky */
+const MAX_DEFER_MS = 2 * 60 * 60_000;
 
 function isTxHash(v: unknown): v is Hex {
   return typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v);
@@ -373,7 +377,12 @@ export class Settlements {
         // Past the grace, a payment that never confirmed no longer holds the epoch open.
         const graceOver = Date.now() >= deadline + IN_FLIGHT_GRACE_MS;
         const defaultable = (r: SettlementRow) => r.status === "awaiting_payment" || (graceOver && r.status === "submitted");
-        for (const r of open.filter(defaultable)) {
+        // No debtor is defaulted for a deadline that passed while Kohaku itself could not reach the
+        // chain (its payment could not be relayed either): defaults wait until the RPC has been
+        // steady for a while, up to a hard cap so a flaky RPC cannot shield a debtor that never pays.
+        const steady = Date.now() - this.chain.rpcTroubleAt >= RPC_STEADY_MS;
+        const mustDecide = Date.now() >= deadline + MAX_DEFER_MS;
+        for (const r of !steady && !mustDecide ? [] : open.filter(defaultable)) {
           // the list above can be seconds old: a debtor that has paid since is recorded, not defaulted
           const fresh = this.get(r.id);
           if (!fresh || !defaultable(fresh)) continue;
