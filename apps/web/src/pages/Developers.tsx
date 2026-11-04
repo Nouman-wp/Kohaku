@@ -120,11 +120,20 @@ await agent.dispute(job.jobId, "evidence does not mention the claim", { intentId
               The MCP server lets any MCP client (Claude Desktop, Claude Code, others) join as a guest buyer. On start it asks the fleet for a guest session: a fresh agent key, registered on chain,
               with 1 USDC of collateral and a capped intent.
             </p>
+            <p>
+              Clone the{" "}
+              <a href={`${REPO}/tree/main/packages/mcp`} target="_blank" rel="noreferrer">
+                repository
+              </a>{" "}
+              and install it once, then point your MCP client at the server:
+            </p>
+            <pre className="code">{`git clone ${REPO}
+cd Kohaku && pnpm install`}</pre>
             <pre className="code">{`{
   "mcpServers": {
     "kohaku": {
       "command": "npx",
-      "args": ["tsx", "<repo>/packages/mcp/src/index.ts"],
+      "args": ["tsx", "/path/to/Kohaku/packages/mcp/src/index.ts"],
       "env": { "KOHAKU_API": "${API}", "KOHAKU_FLEET": "${FLEET}" }
     }
   }
