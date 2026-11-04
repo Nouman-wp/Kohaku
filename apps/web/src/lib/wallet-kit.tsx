@@ -3,8 +3,9 @@
 //
 // MetaMask on a phone: RainbowKit's MetaMask option uses the MetaMask SDK there, which opens the
 // MetaMask app, asks for approval and hands the connection back to the browser. It needs no
-// WalletConnect project id. Every other mobile wallet, and the desktop QR code, goes through
-// WalletConnect: set VITE_WALLETCONNECT_PROJECT_ID (free at dashboard.reown.com) for production.
+// WalletConnect project id. OKX, Trust, Rainbow, the WalletConnect QR code and other mobile wallets
+// go through WalletConnect and appear once VITE_WALLETCONNECT_PROJECT_ID is set (free at
+// dashboard.reown.com, with the site's domains on the project's allowlist).
 import "@rainbow-me/rainbowkit/styles.css";
 import { useEffect, useState, type ReactNode } from "react";
 import { ConnectButton, RainbowKitProvider, connectorsForWallets, darkTheme, useConnectModal, type Theme } from "@rainbow-me/rainbowkit";
@@ -22,16 +23,30 @@ const LOCAL = /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(API);
 // the deployment chain comes from /v1/config at runtime; wagmi needs the list up front
 const chains: readonly [Chain, ...Chain[]] = LOCAL ? [CHAINS["hashkey-testnet"], CHAINS.hashkey, CHAINS.local] : [CHAINS["hashkey-testnet"], CHAINS.hashkey];
 
-// RainbowKit maps "YOUR_PROJECT_ID" to its own example project so WalletConnect works before a
-// real id is configured
-const projectId = (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined)?.trim() || "YOUR_PROJECT_ID";
+// Without a project id, WalletConnect refuses our origin, so the modal lists only what works without
+// it. RainbowKit still needs some id to build its connectors; "YOUR_PROJECT_ID" is its placeholder.
+const wcProjectId = (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined)?.trim() || null;
+const projectId = wcProjectId ?? "YOUR_PROJECT_ID";
 const origin = typeof window !== "undefined" ? window.location.origin : "https://kohaku.caspx.in";
+const hasInjected = typeof window !== "undefined" && !!(window as { ethereum?: unknown }).ethereum;
+
+// On a desktop without the extension, RainbowKit's MetaMask entry shows a WalletConnect QR code;
+// with no project id that QR never loads, so offer the extension download instead. (RainbowKit
+// sets qrCode exactly in that case: no MetaMask injected and not a phone.)
+const metaMaskOnly: typeof metaMaskWallet = (options) => {
+  const wallet = metaMaskWallet(options);
+  return wallet.qrCode ? { ...wallet, qrCode: undefined, installed: false } : wallet;
+};
+// "Browser Wallet" catches injected wallets that don't announce themselves; pointless without one
+const injected = hasInjected ? [injectedWallet] : [];
 
 const connectors = connectorsForWallets(
-  [
-    { groupName: "Recommended", wallets: [metaMaskWallet, okxWallet, walletConnectWallet] },
-    { groupName: "More wallets", wallets: [rainbowWallet, trustWallet, injectedWallet] },
-  ],
+  wcProjectId
+    ? [
+        { groupName: "Recommended", wallets: [metaMaskWallet, okxWallet, walletConnectWallet] },
+        { groupName: "More wallets", wallets: [rainbowWallet, trustWallet, ...injected] },
+      ]
+    : [{ groupName: "Recommended", wallets: [metaMaskOnly, ...injected] }],
   {
     appName: "Kohaku",
     appDescription: "The clearing house for agent-to-agent payments on HashKey Chain",

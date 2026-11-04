@@ -430,9 +430,13 @@ why. Newest decisions are at the bottom of each section.
   operator approves there, and every later signature or transaction opens the app again. That path
   needs no WalletConnect project id. OKX, Trust, Rainbow, the WalletConnect QR code and any other
   WalletConnect wallet use the WalletConnect relay.
-- **Project id:** `VITE_WALLETCONNECT_PROJECT_ID` (free at dashboard.reown.com). Until one is set,
-  the build falls back to RainbowKit's example project. That is fine for testing, but a real id
-  should replace it before anyone depends on WalletConnect.
+- **Project id:** `VITE_WALLETCONNECT_PROJECT_ID` (free at dashboard.reown.com, with the site's
+  domains on the project's allowlist). WalletConnect refuses origins that are not on a project's
+  allowlist; RainbowKit's example id rejected kohaku.caspx.in. So until an id is set, the modal
+  lists only what works without one:
+  - MetaMask: the app on a phone, the extension on a desktop, and RainbowKit's "Get MetaMask"
+    screen on a desktop without the extension.
+  - Any injected or EIP-6963 wallet.
 - **Unchanged:**
   - The pages still get the same wallet object (address, chain, a viem client).
   - The client is still pinned to the deployment chain, so viem refuses to send while the wallet
