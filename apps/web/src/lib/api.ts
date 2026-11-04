@@ -221,10 +221,18 @@ async function loadAgents() {
 async function loadRecent() {
   try {
     const epochs = await api<EpochView[]>("/v1/epochs?limit=30");
+    const cleared = (e: EpochView) => e.phase === "sealed" && e.iouCount > 0;
+    // A quiet spell, or a backlog of epochs waiting to close, can push the last cleared epoch out
+    // of the newest 30; page back a little so the landing page still shows a real one.
+    for (let page = 0; page < 4 && epochs.length && !epochs.some(cleared); page++) {
+      const older = await api<EpochView[]>(`/v1/epochs?limit=50&before=${epochs[epochs.length - 1]!.id}`);
+      if (!older.length) break;
+      epochs.push(...older);
+    }
     const m = new Map(state.epochs);
     for (const e of epochs) if (!m.has(e.id)) m.set(e.id, e);
     state.epochs = m;
-    const sealed = epochs.find((e) => e.phase === "sealed" && e.iouCount > 0);
+    const sealed = epochs.find(cleared);
     if (sealed && !state.netted.has(sealed.id)) {
       const d = await api<{ positions: PositionView[] }>(`/v1/epochs/${sealed.id}`);
       state.netted = new Map(state.netted).set(sealed.id, d.positions);
