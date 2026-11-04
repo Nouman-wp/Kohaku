@@ -68,7 +68,9 @@ export class Chain {
     this.viemChain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
     // HashKey Chain makes a block every ~2 s; polling faster only spends the public RPC's rate limit
     const pollingInterval = key === "local" ? 250 : 2_000;
-    // remember when the RPC last let us down (rate limit, server error, timeout, network)
+    // remember when the RPC last let us down (rate limit, server error, timeout, network). A fresh
+    // start on a public chain has not seen it work yet: it may be restarting into an outage.
+    this.rpcTroubleAt = key === "local" ? 0 : Date.now();
     const fetchFn = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
       try {
         const res = await fetch(input, init);
