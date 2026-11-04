@@ -5,3 +5,8 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+
+overrides:
+  # RainbowKit's QR code (cuer 0.0.3) asks for qr "~0"; qr 0.6+ rejects the border: 0 it passes
+  # and the WalletConnect QR screen crashes
+  "cuer>qr": "0.5.5"

@@ -419,3 +419,26 @@ why. Newest decisions are at the bottom of each section.
     HSP's USDC on HashKey Chain (177).
   - The simulation stays as a labelled fallback while the payer holds less than the quote.
 
+
+### 31. Wallet connection through RainbowKit
+
+- **Why:** the console and the intent composer used to talk to `window.ethereum` directly. That
+  only works with a browser extension, or inside a wallet app's own browser. Chrome or Safari on a
+  phone has no injected wallet, so operators could not connect from their phones.
+- **What changed:** the connect button opens RainbowKit (wagmi underneath), themed in the site's
+  colours. On a phone, MetaMask goes through the MetaMask SDK: it opens the MetaMask app, the
+  operator approves there, and every later signature or transaction opens the app again. That path
+  needs no WalletConnect project id. OKX, Trust, Rainbow, the WalletConnect QR code and any other
+  WalletConnect wallet use the WalletConnect relay.
+- **Project id:** `VITE_WALLETCONNECT_PROJECT_ID` (free at dashboard.reown.com). Until one is set,
+  the build falls back to RainbowKit's example project. That is fine for testing, but a real id
+  should replace it before anyone depends on WalletConnect.
+- **Unchanged:**
+  - The pages still get the same wallet object (address, chain, a viem client).
+  - The client is still pinned to the deployment chain, so viem refuses to send while the wallet
+    is on another network.
+  - "Switch to HashKey Chain Testnet" adds the network to the wallet if it is missing.
+  - Only the two wallet pages load the wallet code, so the landing page bundle did not grow.
+- **Dependency pin:** RainbowKit 2.2.11 draws QR codes with cuer 0.0.3, which accepts any qr 0.x.
+  qr 0.6 and later reject the `border: 0` that cuer passes, which crashed the QR screen.
+  `pnpm-workspace.yaml` pins `cuer>qr` to 0.5.5.

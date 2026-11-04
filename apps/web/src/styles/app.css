@@ -1671,3 +1671,18 @@ a.list-row:hover {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* connected wallet chip (opens RainbowKit's account modal) */
+button.wallet-chip {
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+button.wallet-chip:hover {
+  border-color: var(--control-hover);
+  color: var(--text);
+}
+button.wallet-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

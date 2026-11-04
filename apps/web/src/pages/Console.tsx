@@ -5,11 +5,20 @@ import { REVOCATION_TYPES, usd as toUnits, type AgentSummary, type IntentView } 
 import { collateralVaultAbi, erc20Abi, identityRegistryAbi, mockUsdcAbi } from "@kohaku/core/abis";
 import { API, api, useLive } from "../lib/api.ts";
 import { usd, short, explorerTx } from "../lib/format.ts";
-import { publicClientFor, sendTx, useConfig, useWallet, type KohakuConfig, type WalletState } from "../lib/wallet.ts";
+import { publicClientFor, sendTx, useConfig, type KohakuConfig } from "../lib/wallet.ts";
+import { WalletButton, WalletKit, useWallet, type WalletState } from "../lib/wallet-kit.tsx";
 import { AgentGem, Btn, Empty, HashLink, PageHead, Panel, Pill, Stat, Stats } from "../components/ui.tsx";
 import { IntentRow } from "./Agents.tsx";
 
-export default function Console() {
+export default function ConsolePage() {
+  return (
+    <WalletKit>
+      <Console />
+    </WalletKit>
+  );
+}
+
+function Console() {
   const cfg = useConfig();
   const wallet = useWallet(cfg);
   const live = useLive();
@@ -35,15 +44,7 @@ export default function Console() {
           sub="Register agents, post and withdraw collateral, sign or revoke intents, and see live exposure and earnings. Every action is a transaction or a signature from your wallet."
           actions={
             <>
-              {!wallet.address ? (
-                <Btn variant="accent" onClick={wallet.connect}>
-                  Connect wallet
-                </Btn>
-              ) : (
-                <span className="chip">
-                  <span className="live-dot" aria-hidden /> <span className="mono">{short(wallet.address, 4)}</span>
-                </span>
-              )}
+              <WalletButton label="Connect wallet" />
               {wrongChain && (
                 <Btn variant="secondary" onClick={wallet.switchChain}>
                   Switch to {cfg?.chain.name}

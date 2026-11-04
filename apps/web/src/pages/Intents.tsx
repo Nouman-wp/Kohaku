@@ -4,13 +4,22 @@ import { isAddressEqual, type Address, type Hex } from "viem";
 import { INTENT_TYPES, usd as toUnits, type IntentView, type JobView } from "@kohaku/core";
 import { api, fleet, useApi, useLive, agentName } from "../lib/api.ts";
 import { ago, usd, short } from "../lib/format.ts";
-import { useConfig, useWallet } from "../lib/wallet.ts";
+import { useConfig } from "../lib/wallet.ts";
+import { WalletKit, useWallet } from "../lib/wallet-kit.tsx";
 import { AgentGem, Btn, Empty, PageHead, Panel, Pill, Stat, Stats } from "../components/ui.tsx";
 import { Loading, Missing } from "./Epochs.tsx";
 
 const SERVICES = ["search", "factcheck", "summarize", "translate", "describe", "verdict"];
 
 export function IntentComposer() {
+  return (
+    <WalletKit>
+      <Composer />
+    </WalletKit>
+  );
+}
+
+function Composer() {
   const live = useLive();
   const cfg = useConfig();
   const wallet = useWallet(cfg);
@@ -35,6 +44,7 @@ export function IntentComposer() {
   const buyerId = buyer || orchestrator?.agentId || "";
   const buyerAgent = live.agents.find((a) => a.agentId === buyerId);
   const isOperator = !!(wallet.address && buyerAgent && isAddressEqual(buyerAgent.operator as Address, wallet.address));
+  const wrongChain = !!(cfg && wallet.chainId !== null && wallet.chainId !== cfg.chain.id);
 
   const signWithWallet = async () => {
     if (!cfg || !wallet.client || !wallet.address) return;
@@ -147,11 +157,16 @@ export function IntentComposer() {
                 <Btn variant="accent" onClick={wallet.connect}>
                   Connect wallet to sign
                 </Btn>
+              ) : wrongChain ? (
+                <Btn variant="accent" onClick={wallet.switchChain}>
+                  Switch to {cfg?.chain.name}
+                </Btn>
               ) : (
                 <Btn variant="accent" onClick={signWithWallet} disabled={!isOperator}>
                   Sign with <span className="mono">{short(wallet.address, 4)}</span>
                 </Btn>
               )}
+              {wallet.error && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{wallet.error}</div>}
               {wallet.address && !isOperator && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Only {buyerAgent?.name ?? "the agent"}’s operator can authorise its spending.</div>}
             </div>
             <div className="intent-demo">
