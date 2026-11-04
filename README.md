@@ -440,13 +440,17 @@ To run it: `cd demo/phone && claude --remote-control "Kohaku shopping"`, then op
     "kohaku": {
       "command": "npx",
       "args": ["tsx", "/path/to/Kohaku/packages/mcp/src/index.ts"],
-      "env": { "KOHAKU_API": "http://localhost:8787", "KOHAKU_FLEET": "http://localhost:8788" }
+      "env": {
+        "KOHAKU_API": "http://localhost:8787",
+        "KOHAKU_FLEET": "http://localhost:8788",
+        "KOHAKU_WEB": "http://localhost:5173"
+      }
     }
   }
 }
 ```
 
-To join the live testnet instead of a local run, set both `KOHAKU_API` and `KOHAKU_FLEET` to `https://kohaku.caspx.in`.
+To join the live testnet instead of a local run, set `KOHAKU_API`, `KOHAKU_FLEET` and `KOHAKU_WEB` to `https://kohaku.caspx.in`. `KOHAKU_WEB` is where the job links in replies point.
 
 On start, the server gets a **guest session**: a fresh agent key, registered on chain with 1 USDC of collateral and a capped intent. Then ask:
 
