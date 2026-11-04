@@ -228,7 +228,9 @@ export class MerchantHsp implements HspPort {
       records.find((r) => hspStatusClass(r.status) === "success") ??
       records[0];
     if (!rec) return { ...none, outcome: "RETRYABLE", status: "payment-required", reason: "HSP has no payment for this order yet" };
-    const base = { paymentId: rec.payment_request_id ?? null, txHash: (rec.tx_signature as Hex | null) ?? null, receipt: rec, receiptHash: null };
+    // a payment still in flight carries tx_signature "" (the local gateway and HSP both do this)
+    const sig = typeof rec.tx_signature === "string" && /^0x[0-9a-fA-F]{64}$/.test(rec.tx_signature) ? (rec.tx_signature as Hex) : null;
+    const base = { paymentId: rec.payment_request_id ?? null, txHash: sig, receipt: rec, receiptHash: null };
     const cls = hspStatusClass(rec.status);
     if (cls === "pending" || cls === "unknown") return { ...base, outcome: "RETRYABLE", status: rec.status, reason: `HSP status ${rec.status}` };
     if (cls === "failed") return { ...base, outcome: "PERMANENT", status: rec.status, reason: rec.status_reason ?? "HSP reported the payment failed" };
@@ -236,8 +238,8 @@ export class MerchantHsp implements HspPort {
     // HSP says safe. Bind its record to this debt, then check the chain ourselves.
     const mismatch = this.recordMismatch(rec, order, cartMandateId);
     if (mismatch) return { ...base, outcome: "POLICY", status: rec.status, reason: mismatch };
-    const tx = rec.tx_signature as Hex | undefined;
-    if (!tx || !/^0x[0-9a-fA-F]{64}$/.test(tx)) return { ...base, outcome: "RETRYABLE", status: rec.status, reason: "HSP has not returned the settlement transaction yet" };
+    const tx = sig;
+    if (!tx) return { ...base, outcome: "RETRYABLE", status: rec.status, reason: "HSP has not returned the settlement transaction yet" };
     const t = await checkTransfer(this.client, tx, order.token, order.payer, order.payTo, order.amount, order.orderRef);
     if (!t.ok) return { ...base, outcome: t.retryable ? "RETRYABLE" : "POLICY", status: rec.status, reason: t.reason };
     return { ...base, outcome: "ACCEPT", status: rec.status, txHash: tx, receiptHash: keccak256(stringToHex(hspCanonical(rec))) };

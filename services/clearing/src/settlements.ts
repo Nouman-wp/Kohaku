@@ -9,6 +9,12 @@ import { bus, log } from "./bus.ts";
 import { epochView, payoutView, settlementView, type EpochRow, type PayoutRow, type SettlementRow } from "./views.ts";
 
 const DEFAULT_GRACE_MS = 3_000;
+/** how long past the deadline a payment HSP is still carrying holds off the default */
+const IN_FLIGHT_GRACE_MS = 10 * 60_000;
+
+function isTxHash(v: unknown): v is Hex {
+  return typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v);
+}
 
 /**
  * Settlement of net debts through HSP, and payout to net creditors.
@@ -218,6 +224,9 @@ export class Settlements {
     if (!this.registry.get(row.agent_id) || !row.hsp_cart_id) return;
     const report = row.mandate_json ? (JSON.parse(row.mandate_json) as PaymentReport) : null;
     const result = await this.hsp.verify(this.hspOrder(row), row.hsp_cart_id, report);
+    // only a real transaction hash is ever stored: settlement_tx is unique, and a placeholder ("")
+    // shared by two pending payments would block every later update
+    result.txHash = isTxHash(result.txHash) ? result.txHash : null;
     const now = Date.now();
     if (result.outcome === "ACCEPT") {
       this.db.run(
@@ -301,21 +310,38 @@ export class Settlements {
 
   /** Called on a timer: retries, deadlines, defaults and payouts. */
   async tick(): Promise<void> {
-    await this.openOrders();
+    // each settlement and each epoch moves on its own: one that fails is logged and retried on the
+    // next tick, without holding up the others
+    const step = async (what: string, fn: () => Promise<void>) => {
+      try {
+        await fn();
+      } catch (err) {
+        log("warn", "settlement", `${what}: ${(err as Error).message}`);
+      }
+    };
+    await step("opening HSP orders", () => this.openOrders());
     for (const r of this.db.all<{ id: string }>("SELECT id FROM settlements WHERE status IN ('submitted','verified')")) {
-      await this.process(r.id);
+      await step(r.id, () => this.process(r.id));
     }
     // a debtor that paid but never reported (crashed, lost response) is still found
     const now = Date.now();
     for (const r of this.db.all<SettlementRow>("SELECT * FROM settlements WHERE status = 'awaiting_payment' AND hsp_cart_id IS NOT NULL")) {
       if (now - (this.polledAt.get(r.id) ?? r.updated_at) < 15_000) continue;
       this.polledAt.set(r.id, now);
-      const v = await this.hsp.verify(this.hspOrder(r), r.hsp_cart_id!, null);
-      if (v.outcome === "ACCEPT" || (v.outcome === "RETRYABLE" && v.status !== "payment-required" && v.status !== "unknown")) await this.onHspEvent(r.hsp_cart_id!);
+      await step(r.id, async () => {
+        if (await this.paymentInFlight(r)) await this.onHspEvent(r.hsp_cart_id!);
+      });
     }
     for (const e of this.db.all<EpochRow>("SELECT * FROM epochs WHERE phase IN ('settling','paying') ORDER BY id")) {
-      await this.drive(e);
+      await step(`epoch ${e.id}`, () => this.drive(e));
     }
+  }
+
+  /** HSP holds a payment for this debt's order, paid or on its way. */
+  private async paymentInFlight(r: SettlementRow): Promise<boolean> {
+    if (!r.hsp_cart_id) return false;
+    const v = await this.hsp.verify(this.hspOrder(r), r.hsp_cart_id, null);
+    return v.outcome === "ACCEPT" || (v.outcome === "RETRYABLE" && v.status !== "payment-required" && v.status !== "unknown");
   }
 
   private async drive(e: EpochRow): Promise<void> {
@@ -327,7 +353,21 @@ export class Settlements {
       const block = await this.chain.publicClient.getBlock().catch(() => null);
       const chainNow = block ? Number(block.timestamp) * 1000 : Date.now();
       if (chainNow > deadline) {
-        for (const r of open.filter((r) => r.status === "awaiting_payment")) await this.default(r);
+        // The contract records a settlement after the deadline too, so a payment HSP is still
+        // carrying (a slow chain, a slow relay) wins over the default, within a bounded grace.
+        // Past the grace, a payment that never confirmed no longer holds the epoch open.
+        const graceOver = Date.now() >= deadline + IN_FLIGHT_GRACE_MS;
+        const defaultable = (r: SettlementRow) => r.status === "awaiting_payment" || (graceOver && r.status === "submitted");
+        for (const r of open.filter(defaultable)) {
+          // the list above can be seconds old: a debtor that has paid since is recorded, not defaulted
+          const fresh = this.get(r.id);
+          if (!fresh || !defaultable(fresh)) continue;
+          if (!graceOver && (await this.paymentInFlight(fresh).catch(() => false))) {
+            await this.onHspEvent(fresh.hsp_cart_id!);
+            continue;
+          }
+          await this.default(fresh);
+        }
       }
     }
     const stillOpen = this.list({ epoch: e.id }).filter((r) => r.status !== "recorded" && r.status !== "defaulted");

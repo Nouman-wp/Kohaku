@@ -290,6 +290,8 @@ export class Db {
       "CREATE UNIQUE INDEX IF NOT EXISTS settlements_cart ON settlements(hsp_cart_id) WHERE hsp_cart_id IS NOT NULL",
       // earlier versions lost the payout hash when the seal ran on a later tick; the payouts table kept it
       "UPDATE epochs SET payout_tx = (SELECT tx FROM payouts WHERE payouts.epoch = epochs.id AND tx IS NOT NULL LIMIT 1) WHERE payout_tx IS NULL",
+      // earlier versions stored HSP's empty tx_signature for a payment still in flight
+      "UPDATE settlements SET settlement_tx = NULL WHERE settlement_tx = ''",
     ]) {
       try {
         this.raw.exec(sql);
