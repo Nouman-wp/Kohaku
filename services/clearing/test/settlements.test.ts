@@ -15,7 +15,7 @@ const TX = ("0x" + "ab".repeat(32)) as Hex;
 
 type Verify = (cart: string) => HspVerification | Promise<HspVerification>;
 
-function setup(verify: Verify) {
+function setup(verify: Verify, hold?: Promise<void>) {
   const db = new Db(mkdtempSync(join(tmpdir(), "kohaku-stl-")));
   const writes: string[] = [];
   const chain = {
@@ -24,6 +24,7 @@ function setup(verify: Verify) {
     publicClient: { getBlock: async () => ({ timestamp: BigInt(Math.floor(Date.now() / 1000)) }) },
     write: async (label: string) => {
       writes.push(label);
+      if (hold) await hold;
       return { transactionHash: ("0x" + "01".repeat(32)) as Hex, logs: [] };
     },
     position: async () => ({ state: 1 }),
@@ -133,5 +134,28 @@ describe("settlement pipeline", () => {
     await s.tick();
     expect(writes).toContain("declareDefault e178 #6");
     expect(row(db, "stl_178_6").status).toBe("defaulted");
+  });
+
+  it("declares a default once while ticks pile up on a slow chain", async () => {
+    let release!: () => void;
+    const { db, s, writes } = setup(() => pending("payment-required"), new Promise<void>((r) => (release = r)));
+    debts(db, 186, 30_000, [{ agent: 1, status: "awaiting_payment" }]);
+    db.run("UPDATE settlements SET updated_at = ?", Date.now());
+    const ticks = [s.tick(), s.tick(), s.tick()];
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    await Promise.all(ticks);
+    await s.tick();
+    expect(writes.filter((w) => w === "declareDefault e186 #1")).toHaveLength(1);
+    expect(db.get<{ defaults: number }>("SELECT defaults FROM epochs WHERE id = 186")!.defaults).toBe(1);
+  });
+
+  it("repairs default counts inflated by earlier versions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kohaku-stl-"));
+    const db = new Db(dir);
+    debts(db, 186, 30_000, [{ agent: 1, status: "defaulted" }]);
+    db.run("INSERT INTO positions(epoch, agent_id, credit, debit, net, state) VALUES (186, 1, 0, 15600, -15600, 'defaulted')");
+    db.run("UPDATE epochs SET defaults = 455 WHERE id = 186");
+    expect(new Db(dir).get<{ defaults: number }>("SELECT defaults FROM epochs WHERE id = 186")!.defaults).toBe(1);
   });
 });

@@ -64,7 +64,8 @@ export class Chain {
     this.d = deployment;
     const base = CHAINS[key];
     this.viemChain = { ...base, rpcUrls: { default: { http: [rpcUrl] } } };
-    const pollingInterval = key === "local" ? 250 : 1_000;
+    // HashKey Chain makes a block every ~2 s; polling faster only spends the public RPC's rate limit
+    const pollingInterval = key === "local" ? 250 : 2_000;
     this.publicClient = createPublicClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 3, timeout: 20_000 }), pollingInterval }) as PublicClient;
     this.account = privateKeyToAccount(clearerKey, { nonceManager });
     this.wallet = createWalletClient({ chain: this.viemChain, transport: http(rpcUrl, { retryCount: 2, timeout: 30_000 }), account: this.account, pollingInterval });

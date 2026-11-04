@@ -292,6 +292,8 @@ export class Db {
       "UPDATE epochs SET payout_tx = (SELECT tx FROM payouts WHERE payouts.epoch = epochs.id AND tx IS NOT NULL LIMIT 1) WHERE payout_tx IS NULL",
       // earlier versions stored HSP's empty tx_signature for a payment still in flight
       "UPDATE settlements SET settlement_tx = NULL WHERE settlement_tx = ''",
+      // earlier versions counted a default again each time a repeated declareDefault came back
+      "UPDATE epochs SET defaults = (SELECT COUNT(*) FROM positions p WHERE p.epoch = epochs.id AND p.state = 'defaulted') WHERE defaults > 0",
     ]) {
       try {
         this.raw.exec(sql);

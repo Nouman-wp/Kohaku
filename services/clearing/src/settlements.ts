@@ -34,8 +34,11 @@ export class Settlements {
   private inflight = new Set<string>();
   private paying = new Set<number>();
   private opening = new Set<string>();
+  private defaulting = new Set<string>();
   private failures = new Map<string, number>();
   private polledAt = new Map<string, number>();
+  /** set while a tick runs: the timer fires every 2 s, but a tick waits on the chain and HSP */
+  private ticking = false;
 
   constructor(
     private readonly db: Db,
@@ -310,6 +313,18 @@ export class Settlements {
 
   /** Called on a timer: retries, deadlines, defaults and payouts. */
   async tick(): Promise<void> {
+    // One tick at a time. Every await below has a timeout, so a tick always ends; overlapping
+    // ticks on a slow chain would only queue the same chain writes again and again.
+    if (this.ticking) return;
+    this.ticking = true;
+    try {
+      await this.tickOnce();
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  private async tickOnce(): Promise<void> {
     // each settlement and each epoch moves on its own: one that fails is logged and retried on the
     // next tick, without holding up the others
     const step = async (what: string, fn: () => Promise<void>) => {
@@ -375,26 +390,39 @@ export class Settlements {
   }
 
   private async default(row: SettlementRow): Promise<void> {
+    // one default per debt in flight
+    if (this.defaulting.has(row.id)) return;
+    this.defaulting.add(row.id);
     try {
-      await this.chain.write(`declareDefault e${row.epoch} #${row.agent_id}`, {
-        address: this.chain.d.clearingHouse,
-        abi: abis.clearingHouseAbi,
-        functionName: "declareDefault",
-        args: [BigInt(row.epoch), BigInt(row.agent_id)],
-      });
-    } catch (err) {
-      const pos = await this.chain.position(BigInt(row.epoch), BigInt(row.agent_id)).catch(() => null);
-      if (!pos || pos.state !== 4) {
-        log("warn", "settlement", `default of #${row.agent_id} in epoch ${row.epoch} failed: ${(err as Error).message}`);
-        return;
+      try {
+        await this.chain.write(`declareDefault e${row.epoch} #${row.agent_id}`, {
+          address: this.chain.d.clearingHouse,
+          abi: abis.clearingHouseAbi,
+          functionName: "declareDefault",
+          args: [BigInt(row.epoch), BigInt(row.agent_id)],
+        });
+      } catch (err) {
+        const pos = await this.chain.position(BigInt(row.epoch), BigInt(row.agent_id)).catch(() => null);
+        if (!pos || pos.state !== 4) {
+          log("warn", "settlement", `default of #${row.agent_id} in epoch ${row.epoch} failed: ${(err as Error).message}`);
+          return;
+        }
       }
+      // counted once, by whichever call moves the row to defaulted
+      const moved = this.db.run(
+        "UPDATE settlements SET status = 'defaulted', error = 'missed the settlement deadline; covered from collateral', updated_at = ? WHERE id = ? AND status != 'defaulted'",
+        Date.now(),
+        row.id,
+      ).changes;
+      if (!moved) return;
+      this.db.run("UPDATE positions SET state = 'defaulted' WHERE epoch = ? AND agent_id = ?", row.epoch, row.agent_id);
+      this.db.run("UPDATE epochs SET defaults = defaults + 1 WHERE id = ?", row.epoch);
+      log("warn", "settlement", `agent #${row.agent_id} defaulted on epoch ${row.epoch}; ${row.amount} seized from collateral`);
+      void this.registry.refreshCollateral([BigInt(row.agent_id)]);
+      this.emit(row.id);
+    } finally {
+      this.defaulting.delete(row.id);
     }
-    this.db.run("UPDATE settlements SET status = 'defaulted', error = 'missed the settlement deadline; covered from collateral', updated_at = ? WHERE id = ?", Date.now(), row.id);
-    this.db.run("UPDATE positions SET state = 'defaulted' WHERE epoch = ? AND agent_id = ?", row.epoch, row.agent_id);
-    this.db.run("UPDATE epochs SET defaults = defaults + 1 WHERE id = ?", row.epoch);
-    log("warn", "settlement", `agent #${row.agent_id} defaulted on epoch ${row.epoch}; ${row.amount} seized from collateral`);
-    void this.registry.refreshCollateral([BigInt(row.agent_id)]);
-    this.emit(row.id);
   }
 
   private async payout(epochId: number): Promise<void> {
