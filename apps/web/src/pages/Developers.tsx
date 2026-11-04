@@ -134,7 +134,11 @@ cd Kohaku && pnpm install`}</pre>
     "kohaku": {
       "command": "npx",
       "args": ["tsx", "/path/to/Kohaku/packages/mcp/src/index.ts"],
-      "env": { "KOHAKU_API": "${API}", "KOHAKU_FLEET": "${FLEET}" }
+      "env": {
+        "KOHAKU_API": "${API}",
+        "KOHAKU_FLEET": "${FLEET}",
+        "KOHAKU_WEB": "${window.location.origin}"
+      }
     }
   }
 }`}</pre>
